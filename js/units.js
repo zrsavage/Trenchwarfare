@@ -4,6 +4,16 @@ globalThis.WF = globalThis.WF || {};
 // Animation events: the renderer replays these. Harmless when game.events is absent (tests).
 WF.emit = function (g, ev) { if (g && g.events) g.events.push(ev); };
 
+// Who is who. Internally the human is always side 'allied' and the computer 'german'
+// (so the rules only exist once); g.player says which real army the human commands.
+WF.Names = {
+  faction(g, side) { const p = (g && g.player) || 'allied'; return side === 'allied' ? p : (p === 'allied' ? 'german' : 'allied'); },
+  adj(g, side) { return this.faction(g, side) === 'allied' ? 'Allied' : 'German'; },
+  plural(g, side) { return this.faction(g, side) === 'allied' ? 'Allies' : 'Germans'; },
+  me(g) { return this.adj(g, 'allied'); }, foe(g) { return this.adj(g, 'german'); },
+  meP(g) { return this.plural(g, 'allied'); }, foeP(g) { return this.plural(g, 'german'); },
+};
+
 WF.Units = (function () {
   const C = WF.CONFIG;
   const M = WF.Map;

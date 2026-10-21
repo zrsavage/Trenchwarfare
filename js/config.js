@@ -108,7 +108,8 @@ WF.CONFIG = {
     trenchGoalByYear: { 1914: 1, 1915: 2, 1916: 3, 1917: 3, 1918: 3 },
     hubReserveAttacksSameTurn: true,
     offensiveYear: 1918,
-    offensiveTurns: [2, 3],      // spring offensive
+    offensiveTurns: [2, 3],      // spring offensive (German attack when you play the Allies)
+    offensiveTurnsVsGerman: [4, 5],   // Allied counteroffensive of summer 1918 when you play Germany
   },
 
   // ---- Home front ----

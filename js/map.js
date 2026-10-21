@@ -53,7 +53,7 @@ WF.Map = (function () {
     if (cell.wire) parts.push('barbed wire');
     if (cell.crater) parts.push('craters and mud');
     if (cell.hub) parts.push('rail hub (objective)');
-    else if (cell.rail) parts.push('German rail line');
+    else if (cell.rail) parts.push('enemy rail line');
     return parts.length ? parts.join(', ') : 'open ground';
   }
 

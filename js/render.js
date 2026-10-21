@@ -19,7 +19,7 @@ WF.Render = (function () {
   const ROWS = C.rows, COLS = C.cols;
   const TAU = Math.PI * 2;
   const paths = {};
-  let canvas, ctx, wrap, dpr = 1, S = 44, seaW = 22, W = 0, H = 0, zoom = 1;
+  let canvas, ctx, wrap, dpr = 1, S = 44, seaW = 22, W = 0, H = 0, zoom = 1, flip = false, lastPlayer = null, meName = 'ALLIED', foeName = 'GERMAN';
   let bg = null, hatch = null, view = null, handlers = {};
   const sprites = new Map(), fx = [];
   let flashT0 = -9999;
@@ -27,11 +27,12 @@ WF.Render = (function () {
   const now = () => performance.now();
 
   // ---- geometry ----
-  const px = r => seaW + r * S;
+  const px = r => seaW + (flip ? ROWS - 1 - r : r) * S;
   const py = c => (COLS - 1 - c) * S;
   const centre = (r, c) => ({ x: px(r) + S / 2, y: py(c) + S / 2 });
   function cellAt(x, y) {
-    const r = Math.floor((x - seaW) / S), c = COLS - 1 - Math.floor(y / S);
+    let r = Math.floor((x - seaW) / S); const c = COLS - 1 - Math.floor(y / S);
+    if (flip) r = ROWS - 1 - r;
     return M.inBounds(r, c) ? { r, c } : null;
   }
   const hash = (r, c, k) => { const v = Math.sin(r * 12.9898 + c * 78.233 + k * 37.719) * 43758.5453; return v - Math.floor(v); };
@@ -133,30 +134,32 @@ WF.Render = (function () {
     b.fillStyle = 'rgba(255,255,255,.13)';
     b.fillText("N O   M A N ' S   L A N D", W / 2, py(6.5) + S * 0.5);
     b.font = '700 ' + Math.round(S * 0.42) + 'px Oswald, Impact, sans-serif';
-    b.fillStyle = 'rgba(120,180,255,.5)'; b.fillText('A L L I E D   R E A R', W / 2, py(0) + S * 0.5);
-    b.fillStyle = 'rgba(255,255,255,.35)'; b.fillText('G E R M A N   R E A R', W / 2, py(11) + S * 0.5);
+    const sp = t => t.split('').join(' ');
+    b.fillStyle = 'rgba(120,180,255,.55)'; b.fillText(sp(meName) + '   ' + sp('REAR'), W / 2, py(0) + S * 0.5);
+    b.fillStyle = 'rgba(255,255,255,.35)'; b.fillText(sp(foeName) + '   ' + sp('REAR'), W / 2, py(11) + S * 0.5);
 
     drawProps(b);
 
-    // sea (left)
-    const sg = b.createLinearGradient(0, 0, seaW, 0); sg.addColorStop(0, '#16405f'); sg.addColorStop(1, '#2f7aa8');
-    b.fillStyle = sg; b.fillRect(0, 0, seaW, H);
+    // sea (left, or right when the map is turned for the German player)
+    const seaX = flip ? W - seaW : 0, mtnX = flip ? 0 : W - seaW;
+    const sg = b.createLinearGradient(seaX, 0, seaX + seaW, 0);
+    if (flip) { sg.addColorStop(0, '#2f7aa8'); sg.addColorStop(1, '#16405f'); } else { sg.addColorStop(0, '#16405f'); sg.addColorStop(1, '#2f7aa8'); }
+    b.fillStyle = sg; b.fillRect(seaX, 0, seaW, H);
     b.strokeStyle = 'rgba(255,255,255,.35)'; b.lineWidth = 1.5;
-    for (let y = 8; y < H; y += 18) { b.beginPath(); for (let x = 3; x < seaW - 3; x += 8) { b.moveTo(x, y + ((x / 8) % 2) * 3); b.quadraticCurveTo(x + 4, y - 3, x + 8, y + ((x / 8) % 2 ? 0 : 3)); } b.stroke(); }
-    b.fillStyle = '#e8d9a8'; b.fillRect(seaW - 3, 0, 3, H);                         // beach
-    b.save(); b.translate(seaW / 2, H / 2); b.rotate(-Math.PI / 2);
-    b.fillStyle = 'rgba(255,255,255,.85)'; b.font = '600 ' + Math.round(seaW * 0.5) + 'px Oswald, sans-serif'; b.fillText('E N G L I S H   C H A N N E L', 0, 0); b.restore();
+    for (let y = 8; y < H; y += 18) { b.beginPath(); for (let x = 3; x < seaW - 3; x += 8) { b.moveTo(seaX + x, y + ((x / 8) % 2) * 3); b.quadraticCurveTo(seaX + x + 4, y - 3, seaX + x + 8, y + ((x / 8) % 2 ? 0 : 3)); } b.stroke(); }
+    b.fillStyle = '#e8d9a8'; b.fillRect(flip ? seaX : seaW - 3, 0, 3, H);                         // beach
+    b.save(); b.translate(seaX + seaW / 2, H / 2); b.rotate(flip ? Math.PI / 2 : -Math.PI / 2);
+    b.fillStyle = 'rgba(255,255,255,.85)'; b.font = '600 ' + Math.round(seaW * 0.55) + 'px Oswald, sans-serif'; b.fillText('E N G L I S H   C H A N N E L', 0, 0); b.restore();
 
-    // mountains (right)
-    const mx = W - seaW;
-    b.fillStyle = '#56634f'; b.fillRect(mx, 0, seaW, H);
+    // mountains
+    b.fillStyle = '#56634f'; b.fillRect(mtnX, 0, seaW, H);
     for (let y = 0; y < H; y += S * 1.1) {
-      const h = seaW * (0.45 + 0.3 * hash(1, y, 4));
-      b.fillStyle = '#7a8790'; b.beginPath(); b.moveTo(mx, y + S * 1.1); b.lineTo(mx + h, y + S * 0.55); b.lineTo(mx, y); b.closePath(); b.fill();
-      b.fillStyle = '#f2f5f7'; b.beginPath(); b.moveTo(mx + h, y + S * 0.55); b.lineTo(mx + h * 0.62, y + S * 0.36); b.lineTo(mx + h * 0.62, y + S * 0.74); b.closePath(); b.fill();
+      const h = seaW * (0.45 + 0.3 * hash(1, y, 4)), dir = flip ? -1 : 1, base = flip ? mtnX + seaW : mtnX;
+      b.fillStyle = '#7a8790'; b.beginPath(); b.moveTo(base, y + S * 1.1); b.lineTo(base + dir * h, y + S * 0.55); b.lineTo(base, y); b.closePath(); b.fill();
+      b.fillStyle = '#f2f5f7'; b.beginPath(); b.moveTo(base + dir * h, y + S * 0.55); b.lineTo(base + dir * h * 0.62, y + S * 0.36); b.lineTo(base + dir * h * 0.62, y + S * 0.74); b.closePath(); b.fill();
     }
-    b.save(); b.translate(mx + seaW / 2, H / 2); b.rotate(Math.PI / 2);
-    b.lineWidth = 4; b.strokeStyle = 'rgba(20,30,20,.9)'; b.font = '600 ' + Math.round(seaW * 0.5) + 'px Oswald, sans-serif'; b.strokeText('S W I T Z E R L A N D', 0, 0); b.fillStyle = '#fff'; b.fillText('S W I T Z E R L A N D', 0, 0); b.restore();
+    b.save(); b.translate(mtnX + seaW / 2, H / 2); b.rotate(flip ? -Math.PI / 2 : Math.PI / 2);
+    b.lineWidth = 4; b.strokeStyle = 'rgba(20,30,20,.9)'; b.font = '600 ' + Math.round(seaW * 0.55) + 'px Oswald, sans-serif'; b.strokeText('S W I T Z E R L A N D', 0, 0); b.fillStyle = '#fff'; b.fillText('S W I T Z E R L A N D', 0, 0); b.restore();
 
     // grid + coordinates
     b.strokeStyle = 'rgba(0,0,0,.12)'; b.lineWidth = 1;
@@ -190,7 +193,7 @@ WF.Render = (function () {
 
   // ---- sprites ----
   function glyphPath(key) { return paths[key] || (paths[key] = new Path2D(WF.GLYPH[key])); }
-  const glyphKey = u => (u.type === 'infantry' ? (u.side === 'allied' ? 'infantryAllied' : 'infantryGerman') : u.type);
+  const glyphKey = u => (u.type === 'infantry' ? (u.faction === 'german' ? 'infantryGerman' : 'infantryAllied') : u.type);
 
   function sync(g) {
     const seen = new Set(), t = now();
@@ -199,7 +202,7 @@ WF.Render = (function () {
       const c = centre(u.r, u.c);
       let sp = sprites.get(u.id);
       if (!sp) { sp = { id: u.id, x: c.x, y: c.y, appear: t, hold: false, ds: u.strength, gone: false, flash: 0 }; sprites.set(u.id, sp); }
-      sp.u = { type: u.type, side: u.side, r: u.r, c: u.c, strength: u.strength, max: u.max, acted: u.acted, broken: u.broken };
+      sp.u = { faction: WF.Names.faction(g, u.side), type: u.type, side: u.side, r: u.r, c: u.c, strength: u.strength, max: u.max, acted: u.acted, broken: u.broken };
       sp.tx = c.x; sp.ty = c.y; sp.gone = false;
     }
     for (const [id, sp] of sprites) if (!seen.has(id) && !sp.gone) { sp.gone = true; sp.goneAt = t; }
@@ -373,7 +376,7 @@ WF.Render = (function () {
       ctx.strokeStyle = o === 'a' ? 'rgba(90,160,255,.95)' : 'rgba(35,35,35,.8)';
       const x = px(r), y = py(c), own = o;
       const edge = (nr, nc, x1, y1, x2, y2) => { if (!M.inBounds(nr, nc) || g.owner[nr][nc] === own) return; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
-      edge(r + 1, c, x + S, y, x + S, y + S); edge(r - 1, c, x, y, x, y + S);
+      for (const nr of [r + 1, r - 1]) { if (!M.inBounds(nr, c)) continue; const bx = (px(r) + px(nr)) / 2 + S / 2; edge(nr, c, bx, y, bx, y + S); }
       edge(r, c + 1, x, y, x + S, y); edge(r, c - 1, x, y + S, x + S, y + S);
     }
     ctx.restore();
@@ -423,7 +426,7 @@ WF.Render = (function () {
       }
       if (v.reach && v.reach.has(k) && v.selected) {
         const u = v.selected, g = sprites.get(u.id);
-        if (g) { ctx.save(); ctx.globalAlpha = 0.5; drawBadge(u, x + S / 2, y + S / 2, 0, t, true); ctx.restore(); }
+        if (g) { ctx.save(); ctx.globalAlpha = 0.5; drawBadge(Object.assign({ faction: WF.Names.faction(v.game, u.side) }, u), x + S / 2, y + S / 2, 0, t, true); ctx.restore(); }
       }
     }
     if (cursor) { ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); roundRect(px(cursor.r) + 4, py(cursor.c) + 4, S - 8, S - 8, 6); ctx.stroke(); ctx.setLineDash([]); }
@@ -567,7 +570,7 @@ WF.Render = (function () {
     canvas.addEventListener('mouseleave', () => { hover = null; handlers.onHover && handlers.onHover(null); });
     canvas.addEventListener('click', e => { const c = eventCell(e); if (c) { cursor = null; handlers.onCell(c.r, c.c); } });
     canvas.addEventListener('keydown', e => {
-      const d = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+      const d0 = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key], d = d0 && [flip ? -d0[0] : d0[0], d0[1]];
       if (d) { e.preventDefault(); cursor = cursor ? { r: cursor.r + d[0], c: cursor.c + d[1] } : { r: 8, c: 3 }; if (!M.inBounds(cursor.r, cursor.c)) cursor = { r: Math.min(ROWS - 1, Math.max(0, cursor.r)), c: Math.min(COLS - 1, Math.max(0, cursor.c)) }; hover = cursor; handlers.onHover && handlers.onHover(hover, 0, 0, true); }
       else if ((e.key === 'Enter' || e.key === ' ') && cursor) { e.preventDefault(); handlers.onCell(cursor.r, cursor.c); }
       else if (e.key === 'Escape') handlers.onCancel && handlers.onCancel();
@@ -579,7 +582,18 @@ WF.Render = (function () {
     requestAnimationFrame(frame);
   }
 
-  function setView(v) { view = v; if (v && v.game) sync(v.game); }
+  function setView(v) {
+    view = v;
+    if (v && v.game) {
+      if (v.game.player !== lastPlayer) {
+        lastPlayer = v.game.player; flip = lastPlayer === 'german';
+        meName = WF.Names.me(v.game).toUpperCase(); foeName = WF.Names.foe(v.game).toUpperCase();
+        for (const sp of sprites.values()) sp.hold = false; sprites.clear();
+        resize();
+      }
+      sync(v.game);
+    }
+  }
   function setZoom(z) { zoom = z; resize(); }
   function scrollTo(r, c) { if (!wrap) return; const p = centre(r, c); wrap.scrollTo({ left: p.x - wrap.clientWidth / 2, top: p.y - wrap.clientHeight / 2, behavior: 'smooth' }); }
   const isBusy = () => queue.length > 0 || fx.some(f => f.k !== 'float' && f.k !== 'dirt');

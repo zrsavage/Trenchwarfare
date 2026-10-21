@@ -6,15 +6,16 @@ WF.Game = (function () {
   let game = null, selectedId = null, mode = 'move', recruitType = null, locked = false, zoomIdx = 0;
   const ZOOMS = [[1, 'Zoom: Fit'], [1.4, 'Zoom: Large'], [1.9, 'Zoom: Huge']];
 
-  function newGame() {
+  function newGame(player) {
     const g = {
-      version: 3, year: C.startYear, turn: 1, turnCount: 1, nextId: 1,
+      version: 4, player: player || 'allied', moments: [], year: C.startYear, turn: 1, turnCount: 1, nextId: 1,
       map: M.create(), owner: [], units: [], events: [],
       casualties: 0, gCasualties: 0, morale: C.startMorale, manpower: C.manpowerByYear[C.startYear] || 0,
       showZones: true, log: [], over: false, tutorialDone: false,
       digCredits: {}, bombarded: [], techUsed: {}, counters: {}, notes: {}, tut: {},
       exhaustion: 0, farthest: 0, warn: null, hubHeld: false,
     };
+    K.stat(g);
     for (let r = 0; r < C.rows; r++) {
       g.owner.push([]);
       for (let c = 0; c < C.cols; c++) g.owner[r].push(c <= C.alliedFront ? 'a' : c >= 8 ? 'g' : null);
@@ -35,7 +36,7 @@ WF.Game = (function () {
       const raw = localStorage.getItem(C.saveKey);
       if (!raw) return null;
       const g = JSON.parse(raw);
-      if (!g || g.version !== 3 || g.over || !g.map || g.map.length !== C.rows || !Array.isArray(g.units)) return null;
+      if (!g || g.version !== 4 || g.over || !g.map || g.map.length !== C.rows || !Array.isArray(g.units)) return null;
       g.events = [];
       return g;
     } catch (e) { return null; }
@@ -146,14 +147,14 @@ WF.Game = (function () {
     if (canAct(sel)) {
       if (mode === 'move') {
         if (clicked && clicked.side === 'german' && C.combat.atkMod[sel.type] > 0 && K.attackTargets(game, sel).includes(clicked)) {
-          if (sel.type === 'tank') game.techUsed.tank = true;
+          if (sel.type === 'tank' && !game.techUsed.tank) game.techUsed.tank = { y: game.year, t: game.turn };
           K.attack(game, sel, clicked); game.tut.attacked = true;
           return afterAction();
         }
         if (!clicked && U.reachable(game, sel).has(k)) {
           const from = M.label(sel.r, sel.c);
           U.moveTo(game, sel, r, c); game.tut.moved = true;
-          if (sel.type === 'tank') game.techUsed.tank = true;
+          if (sel.type === 'tank' && !game.techUsed.tank) game.techUsed.tank = { y: game.year, t: game.turn };
           say(C.units[sel.type].name + ' moved ' + from + ' → ' + M.label(r, c) + '.');
           if (game.map[r][c].hub) Y.note(game, 'hub');
           WF.Audio.play('click');
@@ -200,8 +201,7 @@ WF.Game = (function () {
   }
 
   // ---- Hover tooltips ----
-  const label = u => SIDE[u.side] + ' ' + C.units[u.type].name;
-  const SIDE = { allied: 'Allied', german: 'German' };
+  const label = u => WF.Names.adj(game, u.side) + ' ' + C.units[u.type].name;
   const men = n => Math.round(n * C.menPerStrength).toLocaleString();
 
   function odds(toDef, toAtt) {
@@ -230,7 +230,7 @@ WF.Game = (function () {
       const friendly = hit.some(x => x.side === 'allied');
       return '<b>' + (long ? 'Long barrage' : 'Shell') + ' ' + M.label(r, c) + '</b><div>Up to about <b>' + men(dmg * (1 - [0, .4, .6, .8][cell.trench])) + '</b> damage to the target' +
         (cell.trench ? ' (trench level ' + cell.trench + ' absorbs some)' : '') + '</div><div>Leaves craters and clears wire.</div>' +
-        (long ? '<div class="bad">The Germans will see it coming</div>' : '') + (friendly ? '<div class="bad">Warning: you would hit your own men</div>' : '');
+        (long ? '<div class="bad">The enemy will see it coming</div>' : '') + (friendly ? '<div class="bad">Warning: you would hit your own men</div>' : '');
     }
     if (canAct(sel) && mode === 'gas' && rangeSquares(sel).has(k)) return '<b>Gas attack on ' + M.label(r, c) + '</b><div>Hits 3 squares in a line. Trenches don\'t help against gas.</div>' + (game.techUsed.gas ? '' : '<div class="good">First use: very effective</div>');
     if (v.reach && v.reach.has(k)) {
@@ -244,7 +244,7 @@ WF.Game = (function () {
     }
     const parts = [M.describe(cell)];
     return '<b>Sector ' + M.label(r, c) + '</b><div>' + parts[0].charAt(0).toUpperCase() + parts[0].slice(1) + '</div>' +
-      (U.killZone(game, 'allied').has(r + ',' + c) ? '<div class="bad">German machine-gun fire covers this square</div>' : '');
+      (U.killZone(game, 'allied').has(r + ',' + c) ? '<div class="bad">Enemy machine-gun fire covers this square</div>' : '');
   }
   const g_cover = u => (game.map[u.r][u.c].trench ? '<div class="dim">They are dug in (level ' + game.map[u.r][u.c].trench + ')</div>' : '');
 
@@ -263,11 +263,20 @@ WF.Game = (function () {
     selectedId = null; mode = 'move'; recruitType = null; game.tut.ended = true;
     WF.UI.hideTip();
     game.hubHeld = alliedOnHub();
+    { const kz = U.killZone(game, 'allied'); K.stat(game).exposedTurns += game.units.filter(u => u.side === 'allied' && kz.has(u.r + ',' + u.c)).length; }
     K.mgFire(game, 'allied');
-    WF.UI.banner('German turn', 'Watch what they do');
+    WF.UI.banner(WF.Names.foe(game) + ' turn', 'Watch what they do');
     WF.AI.takeTurn(game);
     K.mgFire(game, 'german');
 
+    { // worst turn of the game
+      const st = K.stat(game), tc = st.turnCauses, total = Object.values(tc).reduce((a, b) => a + b, 0);
+      if (total * C.menPerStrength > (st.worst.men || 0)) {
+        const top = Object.keys(tc).sort((a, b) => tc[b] - tc[a])[0];
+        st.worst = { men: total * C.menPerStrength, label: game.year + ', turn ' + game.turn, cause: ({ machinegun: 'machine guns', shelling: 'artillery shells', assault: 'infantry assaults', gas: 'gas' })[top] || 'combat' };
+      }
+      st.turnCauses = {};
+    }
     let outcome = null, yearCard = null;
     if (game.morale <= 0) outcome = 'collapse';
     else if (game.hubHeld && alliedOnHub()) outcome = 'breakthrough';
@@ -301,7 +310,7 @@ WF.Game = (function () {
   }
 
   function showYearCard(year, first) {
-    const c = Y.card(year);
+    const c = Y.card(year, game);
     if (!c) return;
     WF.Audio.play('horn');
     WF.UI.card({ kicker: String(year), title: c.title, className: 'yearcard',
@@ -310,8 +319,8 @@ WF.Game = (function () {
 
   function intro() {
     WF.UI.card({ kicker: 'August 1914', title: 'Break the stalemate', className: 'briefing',
-      html: '<p class="hist">War has come to Europe. You command the Allied armies (blue) facing the German army (gray) on the Western Front.</p>' +
-        '<ul class="mission"><li><b>Your goal</b>Capture a gold-star <span class="star">★</span> rail hub deep behind the German lines, and hold it for a turn.</li>' +
+      html: '<p class="hist">War has come to Europe. You command the ' + (game.player === 'german' ? 'German army' : 'Allied armies') + ' (blue) facing the ' + (game.player === 'german' ? 'Allied armies' : 'German army') + ' (gray) on the Western Front.</p>' +
+        '<ul class="mission"><li><b>Your goal</b>Capture a gold-star <span class="star">★</span> rail ' + (game.player === 'german' ? 'junction' : 'hub') + ' deep behind the enemy lines, and hold it for a turn.</li>' +
         '<li><b>Your time</b>The war ends in November 1918. That is 30 turns.</li>' +
         '<li><b>Your help</b>Your sergeant explains everything as you go. Just follow the yellow arrows.</li></ul>',
       button: 'Start the war', onClick: () => refresh() });
@@ -322,12 +331,23 @@ WF.Game = (function () {
     clearSave();
     selectedId = null; mode = 'move';
     refresh();
-    WF.UI.endScreen(Y.endSummary(game, type), restart);
+    WF.UI.endScreen(Y.endSummary(game, type), restart, game);
   }
 
   function restart() {
     clearSave();
-    game = newGame(); selectedId = null; mode = 'move'; recruitType = null; locked = false;
+    game = newGame('allied'); selectedId = null; mode = 'move'; recruitType = null; locked = false;
+    refresh();
+    WF.UI.card({ kicker: 'Western Front', title: 'Choose your army', className: 'briefing',
+      html: '<p class="hist">The same war, seen from either side of no man\'s land. The rules are the same for both, so you will meet the same problems.</p>',
+      choices: [
+        { label: 'Play as the Allies', sub: 'Britain, France and their allies. Break through the German line.', onClick: () => begin('allied') },
+        { label: 'Play as Germany', sub: 'The German army. Break through the Allied line.', onClick: () => begin('german') },
+      ] });
+  }
+
+  function begin(player) {
+    game = newGame(player); selectedId = null; mode = 'move'; recruitType = null; locked = false;
     say('August 1914. The war begins. Armies meet in open country.', 'note');
     refresh();
     intro();
@@ -338,7 +358,7 @@ WF.Game = (function () {
       html: '<ol class="steps"><li><b>Select</b> a blue unit by clicking it.</li>' +
         '<li><b>Move</b> by clicking a glowing square. <b>Attack</b> by clicking a red target next to you. Hover to see the odds first.</li>' +
         '<li><b>Dig in</b>, rest or shell using the buttons that appear. Each unit gets one action per turn.</li>' +
-        '<li>Press <b>End Turn</b> (or the E key). The Germans move, then it is your turn again.</li></ol>' +
+        '<li>Press <b>End Turn</b> (or the E key). The enemy moves, then it is your turn again.</li></ol>' +
         '<div class="legend"><span><i class="lg hatch"></i>Machine-gun fire zone: units in the open here get shot</span>' +
         '<span><i class="lg star"></i>Rail hub: capture and hold one to win</span>' +
         '<span><i class="lg dash"></i>Dashed line: the front line between the armies</span>' +

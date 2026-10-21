@@ -7,9 +7,9 @@ globalThis.localStorage = { setItem(){}, getItem(){ return null; }, removeItem()
 const { CONFIG: C, Map: M, Units: U, Combat: K } = WF;
 let seed = 1; WF.rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 
-function run(strategy, s) {
+function run(strategy, s, player) {
   seed = s; WF._end = null;
-  const g = WF.Game.newGame(); WF.Game._set(g);
+  const g = WF.Game.newGame(player || 'allied'); WF.Game._set(g);
   g.log.push({ text: 'start' });
   let guard = 0, end = null;
   while (!g.over && guard++ < 100) {
@@ -70,16 +70,17 @@ function combined(g) {
 }
 
 const N = +process.argv[2] || 30;
+const PLAYER = process.argv[3] === 'german' ? 'german' : 'allied';
 for (const [name, strat] of [['marcher', marcher], ['digger', digger], ['combined', combined]]) {
   const res = {}; let cas = 0, gain = 0, over1914 = 0, n = 0;
   for (let i = 1; i <= N; i++) {
-    const r = run(strat, i * 7919);
+    const r = run(strat, i * 7919, PLAYER);
     res[r.type] = (res[r.type] || 0) + 1; cas += r.g.casualties; gain += WF.Years.gainedSquares(r.g);
     n++;
   }
   console.log(name.padEnd(9), JSON.stringify(res), 'avg casualties', (cas / n).toFixed(1), 'avg gained', (gain / n).toFixed(1));
 }
-if (process.argv[3] === 'detail') {
+if (process.argv[4] === 'detail') {
   const yrs = {};
   for (let i = 1; i <= N; i++) { const r = run(combined, i * 7919); if (r.type === 'breakthrough') { const k = r.g.year + 't' + r.g.turn; yrs[k] = (yrs[k] || 0) + 1; } }
   console.log(yrs);

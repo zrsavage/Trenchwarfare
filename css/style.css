@@ -100,8 +100,13 @@ button:focus-visible, #board:focus-visible { outline: 3px solid var(--brass); ou
 
 /* ---------- Log ---------- */
 #logbox summary { cursor: pointer; font: 500 13px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); padding: 4px 0; }
-#log { list-style: none; margin: 4px 0 0; padding: 6px 8px; max-height: 170px; overflow-y: auto; background: #151a14; border-radius: 8px; font-size: .84rem; }
+#log { list-style: none; margin: 4px 0 0; padding: 6px 8px; max-height: 240px; overflow-y: auto; background: #151a14; border-radius: 8px; font-size: .84rem; }
 #log li { padding: 3px 0; border-bottom: 1px solid #252e22; }
+#log li.has-why { padding: 0; }
+.why-btn { display: flex; width: 100%; justify-content: space-between; gap: 8px; align-items: flex-start; text-align: left; background: none; border: 0; padding: 3px 0; font-size: inherit; cursor: pointer; }
+.why-btn i { flex: none; font-style: normal; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; background: #3a4a33; color: var(--brass); }
+.why-btn:hover i, .why-btn[aria-expanded="true"] i { background: var(--brass); color: #1a1204; }
+.why { margin: 2px 0 6px; padding: 6px 8px; border-left: 3px solid var(--brass); background: #1d2419; color: #dfe6d0; font-size: .82rem; line-height: 1.4; }
 #log li.enemy { color: #c3cab7; font-style: italic; }
 #log li.note { color: var(--brass); font-family: var(--serif); font-size: .8rem; }
 .link { background: none; border: 0; color: var(--dim); text-decoration: underline; font-size: .8rem; align-self: flex-start; padding: 0; }
@@ -167,3 +172,24 @@ button:focus-visible, #board:focus-visible { outline: 3px solid var(--brass); ou
   .bigs { grid-template-columns: repeat(2, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { .attn, #banner.show { animation: none; } }
+
+/* ---------- Side choice, recap, debrief ---------- */
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.choice { text-align: left; padding: 16px; border-radius: 8px; border: 3px solid #2b2417; background: rgba(0,0,0,.05); color: var(--paper-ink); display: flex; flex-direction: column; gap: 6px; }
+.choice b { font: 700 22px var(--display); letter-spacing: .06em; text-transform: uppercase; }
+.choice span { font-family: var(--body); font-size: .92rem; }
+.choice:hover, .choice:focus-visible { background: #2f5d2a; color: #fff; border-color: #1d3a1a; }
+.causes { display: grid; gap: 6px; margin: 6px 0; font-family: var(--body); font-size: .9rem; }
+.cause { display: grid; grid-template-columns: 140px 1fr 70px; gap: 8px; align-items: center; }
+.cause b { text-align: right; font-variant-numeric: tabular-nums; }
+.cbar { height: 12px; background: rgba(0,0,0,.1); border-radius: 6px; overflow: hidden; } .cbar i { display: block; height: 100%; background: #8d2f22; }
+.moments { list-style: none; padding: 0 !important; display: grid; gap: 4px; }
+.moments li { font-family: var(--body) !important; font-size: .92rem !important; padding: 4px 8px; border-left: 4px solid #8a7440; background: rgba(0,0,0,.04); }
+.moments b { font: 700 12px var(--display); letter-spacing: .08em; text-transform: uppercase; color: #6b5617; margin-right: 6px; }
+.qa { margin: 12px 0; font-family: var(--body); }
+.qa label { display: block; font-weight: 700; font-size: .98rem; margin-bottom: 4px; }
+.qdata { font-size: .85rem; color: #4a3f26; background: rgba(139,106,20,.14); padding: 4px 8px; border-radius: 4px; margin-bottom: 6px; }
+.qa textarea, .who-field input, #copy-box { width: 100%; font: 1rem var(--body); padding: 8px; border: 2px solid #8a7440; border-radius: 6px; background: #fffdf5; color: var(--paper-ink); resize: vertical; }
+.who-field { font-family: var(--body); margin: 8px 0; } .who-field label { display: block; font-size: .85rem; margin-bottom: 2px; }
+.sheet .dim { color: #5b4f33; font-family: var(--body); font-size: .88rem; }
+@media (max-width: 600px) { .choices { grid-template-columns: 1fr; } .cause { grid-template-columns: 100px 1fr 60px; } }
