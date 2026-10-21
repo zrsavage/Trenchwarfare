@@ -183,12 +183,16 @@ WF.UI = (function () {
     }
   }
 
-  function showOverlay(title, html, buttonText, onClick) {
+  function showOverlay(title, html, buttonText, onClick, cancelText) {
     $('ov-title').textContent = title;
     $('ov-body').innerHTML = html;
     const btn = $('ov-btn');
     btn.textContent = buttonText;
     btn.onclick = () => { $('overlay').hidden = true; onClick && onClick(); };
+    const cancel = $('ov-cancel');
+    cancel.hidden = !cancelText;
+    cancel.textContent = cancelText || '';
+    cancel.onclick = () => { $('overlay').hidden = true; };
     $('overlay').hidden = false;
     btn.focus({ preventScroll: true });
     const card = document.querySelector('#overlay .card'); if (card) card.scrollTop = 0;

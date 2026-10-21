@@ -253,13 +253,16 @@ WF.Game = (function () {
     WF.UI.init({
       onCell, onAction, onRecruit,
       onToggleZones: v => { game.showZones = v; refresh(); },
-      onNewGame: () => { if (window.confirm('Start a new game? Current progress will be lost.')) restart(); },
+      onNewGame: () => WF.UI.showOverlay('Start a new game?', '<p>Your current game will be lost.</p>', 'Start new game', restart, 'Cancel'),
     });
     const saved = load();
     if (saved) { game = saved; refresh(); }
     else restart();
   }
 
-  if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded', start);
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+    else start();
+  }
   return { newGame, endTurn, onCell, onAction, _set: g => { game = g; }, _get: () => game };
 })();
