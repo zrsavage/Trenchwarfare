@@ -3,7 +3,8 @@ globalThis.WF = globalThis.WF || {};
 
 WF.Game = (function () {
   const C = WF.CONFIG, M = WF.Map, U = WF.Units, K = WF.Combat, Y = WF.Years;
-  let game = null, selectedId = null, mode = 'move', recruitType = null, locked = false, zoomed = false;
+  let game = null, selectedId = null, mode = 'move', recruitType = null, locked = false, zoomIdx = 0;
+  const ZOOMS = [[1, 'Zoom: Fit'], [1.4, 'Zoom: Large'], [1.9, 'Zoom: Huge']];
 
   function newGame() {
     const g = {
@@ -122,7 +123,7 @@ WF.Game = (function () {
   function select(u) {
     selectedId = u.id; recruitType = null; mode = defaultMode(u);
     WF.Audio.play('click');
-    if (zoomed) WF.Render.scrollTo(u.r, u.c);
+    if (zoomIdx) WF.Render.scrollTo(u.r, u.c);
   }
 
   function onCell(r, c) {
@@ -353,7 +354,15 @@ WF.Game = (function () {
     } catch (e) { /* ignore */ }
     WF.UI.init({
       onEndTurn: endTurn, onAction, onRecruit, onHelp: help,
-      onZoom: () => { zoomed = !zoomed; WF.Render.setZoom(zoomed ? 1.6 : 1); document.getElementById('btn-zoom').textContent = zoomed ? 'Zoom: close' : 'Zoom'; const s = selected(); if (s && zoomed) WF.Render.scrollTo(s.r, s.c); },
+      onZoom: () => { zoomIdx = (zoomIdx + 1) % ZOOMS.length; WF.Render.setZoom(ZOOMS[zoomIdx][0]); document.getElementById('btn-zoom').textContent = ZOOMS[zoomIdx][1]; const s = selected(); if (s && zoomIdx) WF.Render.scrollTo(s.r, s.c); },
+      onFull: () => {
+        const b = document.getElementById('btn-full');
+        try {
+          if (document.fullscreenElement) { document.exitFullscreen(); return; }
+          const p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+          if (p && p.catch) p.catch(() => { b.textContent = 'Not available'; b.disabled = true; });
+        } catch (e) { b.textContent = 'Not available'; b.disabled = true; }
+      },
       onSound: () => { WF.Audio.setMuted(!WF.Audio.isMuted()); refresh(); },
       onNewGame: () => WF.UI.card({ title: 'Restart the war?', html: '<p>Your current game will be lost.</p>', button: 'Restart', onClick: restart, cancel: 'Keep playing' }),
     });

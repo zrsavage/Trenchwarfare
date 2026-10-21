@@ -23,6 +23,7 @@ WF.UI = (function () {
     $('btn-help').addEventListener('click', () => handlers.onHelp());
     $('btn-zoom').addEventListener('click', () => handlers.onZoom());
     $('btn-sound').addEventListener('click', () => handlers.onSound());
+    $('btn-full').addEventListener('click', () => handlers.onFull());
     $('newgame').addEventListener('click', () => handlers.onNewGame());
     $('actions').addEventListener('click', e => { const b = e.target.closest('button[data-a]'); if (b && !b.disabled) handlers.onAction(b.dataset.a); });
     $('recruit').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b && !b.disabled) handlers.onRecruit(b.dataset.t); });
