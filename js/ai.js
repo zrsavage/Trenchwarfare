@@ -6,7 +6,9 @@ WF.AI = (function () {
   const C = WF.CONFIG, M = WF.Map, U = WF.Units, K = WF.Combat, A = C.ai, N = WF.Names;
   const stat = g => K.stat(g);
   const aggr = g => A.aggression[N.faction(g, 'german')] || 0;
-  const offTurns = g => (g.player === 'german' ? A.offensiveTurnsVsGerman : A.offensiveTurns);
+  // Turn numbers in the config assume 6 turns a year; shorter games scale them down.
+  const scale = (g, list) => [...new Set((list || []).map(t => Math.max(1, Math.round(t * (g.turnsPerYear || 6) / 6))))];
+  const offTurns = g => scale(g, g.player === 'german' ? A.offensiveTurnsVsGerman : A.offensiveTurns);
   const rnd = () => (WF.rand || Math.random)();
   const germans = g => g.units.filter(u => u.side === 'german');
   const allies = g => g.units.filter(u => u.side === 'allied');
@@ -248,7 +250,7 @@ WF.AI = (function () {
         K.say(g, N.foe(g) + ' reserves move toward ' + M.label(g.warn.r, g.warn.c) + '.', 'enemy', 'Your long bombardment warned them where the attack would come, so they sent reserves there. Before the Somme, a week of shelling did the same.');
         g.warn = null;
       }
-      const pushTurn = ((A.pushes[N.faction(g, 'german')] || {})[g.year] || []).includes(g.turn);
+      const pushTurn = scale(g, (A.pushes[N.faction(g, 'german')] || {})[g.year]).includes(g.turn);
       if (pushTurn) push(g);
       for (const u of germans(g)) runMission(g, u);
       counterattack(g, ctx);

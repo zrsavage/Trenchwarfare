@@ -32,6 +32,8 @@ Designed so a high schooler can play with no instructions:
 - Red hatched squares are machine-gun fire zones; units standing in them get a pulsing red ring.
 - The map is drawn on a canvas with animated units, shells, tracers, dust and gas. Sound effects (synthesized, off by default) can be turned on in the header. Zoom, Help and keyboard play (arrow keys, Enter, Esc, E to end the turn) are available.
 
+Main menu: the game opens on a title screen with Continue (resumes the saved game), New game, How to play, and Teacher options (game length for new games: 6, 4 or 3 turns a year). A Menu button in the top bar and the end screen both return to it; the game stays saved. Nothing is saved until you enter a game.
+
 Choosing a side: at the start you pick the Allies or Germany. The rules are identical (you are always the blue army, the computer the gray one); only names, helmets, historical text, hub names, and the timing of the computer's big 1918 push change. Played as Germany the map is turned 180 degrees (Channel on the right).
 
 "Why?" buttons: battle-log lines about fights, shelling, machine guns, gas, tanks, and the computer's digging, flanking and counterattacks each expand into a one-sentence historical explanation of what just happened.

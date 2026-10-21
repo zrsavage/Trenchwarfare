@@ -8,7 +8,7 @@ WF.Game = (function () {
 
   function newGame(player) {
     const g = {
-      version: 4, player: player || 'allied', moments: [], year: C.startYear, turn: 1, turnCount: 1, nextId: 1,
+      version: 4, player: player || 'allied', moments: [], turnsPerYear: C.turnsPerYear, year: C.startYear, turn: 1, turnCount: 1, nextId: 1,
       map: M.create(), owner: [], units: [], events: [],
       casualties: 0, gCasualties: 0, morale: C.startMorale, manpower: C.manpowerByYear[C.startYear] || 0,
       showZones: true, log: [], over: false, tutorialDone: false,
@@ -28,7 +28,7 @@ WF.Game = (function () {
 
   // ---- Persistence (optional; never allowed to break the game) ----
   function save() {
-    if (game.over) return;
+    if (game.over || !active || !inSession) return;
     try { localStorage.setItem(C.saveKey, JSON.stringify(game, (k, v) => (k === 'events' ? undefined : v))); } catch (e) { /* ignore */ }
   }
   function load() {
@@ -37,7 +37,7 @@ WF.Game = (function () {
       if (!raw) return null;
       const g = JSON.parse(raw);
       if (!g || g.version !== 4 || g.over || !g.map || g.map.length !== C.rows || !Array.isArray(g.units)) return null;
-      g.events = []; g.tips = g.tips || {};
+      g.events = []; g.tips = g.tips || {}; g.turnsPerYear = g.turnsPerYear || 6;
       return g;
     } catch (e) { return null; }
   }
@@ -289,8 +289,8 @@ WF.Game = (function () {
     else if (game.hubHeld && alliedOnHub()) outcome = 'breakthrough';
     if (!outcome) {
       game.turn++; game.turnCount++;
-      if (game.turn > C.turnsPerYear) {
-        if (game.year >= C.endYear) { game.turn = C.turnsPerYear; outcome = 'armistice'; }
+      if (game.turn > game.turnsPerYear) {
+        if (game.year >= C.endYear) { game.turn = game.turnsPerYear; outcome = 'armistice'; }
         else {
           game.turn = 1; game.year++; Y.startYear(game); yearCard = game.year;
           if (game.morale <= 0) outcome = 'collapse';
@@ -311,7 +311,7 @@ WF.Game = (function () {
       locked = false;
       if (outcome) return finish(outcome);
       if (yearCard) showYearCard(yearCard);
-      else WF.UI.banner('Your turn', C.units.infantry ? 'Turn ' + game.turn + ' of ' + C.turnsPerYear + ', ' + game.year : '');
+      else WF.UI.banner('Your turn', C.units.infantry ? 'Turn ' + game.turn + ' of ' + game.turnsPerYear + ', ' + game.year : '');
       refresh();
     });
   }
@@ -338,23 +338,36 @@ WF.Game = (function () {
     clearSave();
     selectedId = null; mode = 'move';
     refresh();
-    WF.UI.endScreen(Y.endSummary(game, type), restart, game);
+    WF.UI.endScreen(Y.endSummary(game, type), chooseSide, game, openMenu);
   }
 
-  function restart() {
-    clearSave();
-    game = newGame('allied'); selectedId = null; mode = 'move'; recruitType = null; locked = false;
-    refresh();
+  // ---- Main menu ----
+  let inSession = false;       // true once the player has entered a game this page load
+  let active = false;          // true when `game` is a real game (saved or started), not the board behind the menu
+  function lengthSetting() { try { const v = parseInt(localStorage.getItem('wf-turns'), 10); if (v >= 2 && v <= 6) return v; } catch (e) { /* ignore */ } return C.turnsPerYear; }
+
+  function openMenu() {
+    const live = active && game && !game.over && game.units.length > 0;
+    WF.UI.menu({
+      canContinue: !!live, inSession,
+      summary: live ? game.year + ', turn ' + game.turn + ' of ' + game.turnsPerYear + '. ' + (game.casualties * C.menPerStrength).toLocaleString() + ' soldiers lost.' : '',
+      length: C.turnsPerYear,
+    });
+  }
+
+  function chooseSide() {
+    WF.UI.closeMenu();
     WF.UI.card({ kicker: 'Western Front', title: 'Choose your army', className: 'briefing',
       html: '<p class="hist">The same war, seen from either side of no man\'s land. The rules are the same for both, so you will meet the same problems.</p>',
       choices: [
         { label: 'Play as the Allies', sub: 'Britain, France and their allies. Break through the German line.', onClick: () => begin('allied') },
         { label: 'Play as Germany', sub: 'The German army. Break through the Allied line.', onClick: () => begin('german') },
-      ] });
+      ],
+      cancel: 'Back to menu', onCancel: openMenu });
   }
 
   function begin(player) {
-    game = newGame(player); selectedId = null; mode = 'move'; recruitType = null; locked = false;
+    game = newGame(player); selectedId = null; mode = 'move'; recruitType = null; locked = false; inSession = true; active = true;
     say('August 1914. The war begins. Armies meet in open country.', 'note');
     refresh();
     intro();
@@ -376,11 +389,15 @@ WF.Game = (function () {
 
   function start() {
     try {
-      const t = parseInt(new URLSearchParams(location.search).get('turns'), 10);   // teacher option: ?turns=4
-      if (t >= 2 && t <= 6) C.turnsPerYear = t;
+      const t = parseInt(new URLSearchParams(location.search).get('turns'), 10);   // teacher shortcut: ?turns=4
+      if (t >= 2 && t <= 6) C.turnsPerYear = t; else C.turnsPerYear = lengthSetting();
     } catch (e) { /* ignore */ }
     WF.UI.init({
       onEndTurn: endTurn, onAction, onRecruit, onHelp: help,
+      onMenu: openMenu,
+      onMenuContinue: () => { inSession = true; WF.UI.closeMenu(); refresh(); },
+      onMenuNew: chooseSide,
+      onLength: n => { C.turnsPerYear = n; try { localStorage.setItem('wf-turns', String(n)); } catch (e) { /* ignore */ } },
       onZoom: () => { zoomIdx = (zoomIdx + 1) % ZOOMS.length; WF.Render.setZoom(ZOOMS[zoomIdx][0]); document.getElementById('btn-zoom').textContent = ZOOMS[zoomIdx][1]; const s = selected(); if (s && zoomIdx) WF.Render.scrollTo(s.r, s.c); },
       onFull: () => {
         const b = document.getElementById('btn-full');
@@ -391,14 +408,16 @@ WF.Game = (function () {
         } catch (e) { b.textContent = 'Not available'; b.disabled = true; }
       },
       onSound: () => { WF.Audio.setMuted(!WF.Audio.isMuted()); refresh(); },
-      onNewGame: () => WF.UI.card({ title: 'Restart the war?', html: '<p>Your current game will be lost.</p>', button: 'Restart', onClick: restart, cancel: 'Keep playing' }),
+      onNewGame: openMenu,
     });
     WF.Render.init(document.getElementById('board'), document.getElementById('board-wrap'), {
       onCell, onHover, onCancel: () => { selectedId = null; mode = 'move'; recruitType = null; refresh(); },
     });
     const saved = load();
-    if (saved) { game = saved; refresh(); }
-    else restart();
+    active = !!saved;
+    game = saved || newGame('allied');       // otherwise just the board behind the menu
+    refresh();
+    openMenu();
   }
 
   if (typeof document !== 'undefined') {

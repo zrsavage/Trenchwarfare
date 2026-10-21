@@ -25,6 +25,11 @@ WF.UI = (function () {
     $('btn-zoom').addEventListener('click', () => handlers.onZoom());
     $('btn-sound').addEventListener('click', () => handlers.onSound());
     $('btn-full').addEventListener('click', () => handlers.onFull());
+    $('btn-menu').addEventListener('click', () => handlers.onMenu());
+    $('menu-continue').addEventListener('click', () => handlers.onMenuContinue());
+    $('menu-new').addEventListener('click', () => handlers.onMenuNew());
+    $('menu-help').addEventListener('click', () => handlers.onHelp());
+    $('menu-length').addEventListener('change', e => handlers.onLength(+e.target.value));
     $('newgame').addEventListener('click', () => handlers.onNewGame());
     $('actions').addEventListener('click', e => { const b = e.target.closest('button[data-a]'); if (b && !b.disabled) handlers.onAction(b.dataset.a); });
     $('recruit').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b && !b.disabled) handlers.onRecruit(b.dataset.t); });
@@ -41,7 +46,7 @@ WF.UI = (function () {
     for (let y = C.startYear; y <= C.endYear; y++) {
       const cls = y < g.year ? 'done' : y === g.year ? 'now' : '';
       let pips = '';
-      if (y === g.year) { for (let i = 1; i <= C.turnsPerYear; i++) pips += '<i class="' + (i < g.turn ? 'p done' : i === g.turn ? 'p now' : 'p') + '"></i>'; }
+      if (y === g.year) { for (let i = 1; i <= g.turnsPerYear; i++) pips += '<i class="' + (i < g.turn ? 'p done' : i === g.turn ? 'p now' : 'p') + '"></i>'; }
       h += '<li class="' + cls + '"><span>' + y + '</span>' + (pips ? '<span class="pips">' + pips + '</span>' : '') + '</li>';
     }
     tl.innerHTML = h;
@@ -209,7 +214,18 @@ WF.UI = (function () {
     try { navigator.clipboard.writeText(text).then(() => { status.textContent = 'Copied. Paste it into your document.'; }, fallback); } catch (e) { fallback(); }
   }
 
-  function endScreen(sum, onAgain, g) {
+  function menu(o) {
+    $('menu-continue').hidden = !o.canContinue;
+    $('menu-continue-sub').textContent = o.summary || '';
+    $('menu-continue').firstChild.textContent = o.inSession ? 'Resume game' : 'Continue';
+    $('menu-length').value = String(o.length);
+    $('menu').hidden = false;
+    ($('menu-continue').hidden ? $('menu-new') : $('menu-continue')).focus({ preventScroll: true });
+  }
+  function closeMenu() { $('menu').hidden = true; }
+  const menuOpen = () => !$('menu').hidden;
+
+  function endScreen(sum, onAgain, g, onMenu) {
     const stats = sum.stats.map(r => '<div class="big"><b>' + esc(r[1]) + '</b><span>' + esc(r[0]) + '</span></div>').join('');
     const causes = sum.causes.length ? '<h3>Where your losses came from</h3><div class="causes">' + sum.causes.map(c =>
       '<div class="cause"><span>' + esc(c.label) + '</span><div class="cbar"><i style="width:' + Math.max(3, Math.round(c.share * 100)) + '%"></i></div><b>' + c.men.toLocaleString() + '</b></div>').join('') + '</div>' : '';
@@ -227,10 +243,10 @@ WF.UI = (function () {
       extra: [{ label: 'Copy my results', onClick: () => {
         const answers = sum.questions.map((q, i) => (document.getElementById('qa-' + i) || {}).value || '');
         copyText(WF.Years.report(sum, answers, (document.getElementById('qa-name') || {}).value || ''), document.getElementById('copy-status'));
-      } }],
+      } }, { label: 'Main menu', onClick: () => { $('overlay').hidden = true; onMenu && onMenu(); } }],
       button: 'Play again', onClick: onAgain,
     });
   }
 
-  return { init, render, showTip, hideTip, banner, card, endScreen, glyph };
+  return { init, render, showTip, hideTip, banner, card, endScreen, glyph, menu, closeMenu, menuOpen };
 })();

@@ -13,16 +13,17 @@
   <div id="app">
     <header id="hud">
       <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5 14.9 8.6 22.5 9.2 16.7 14.2 18.5 21.6 12 17.6 5.5 21.6 7.3 14.2 1.5 9.2 9.1 8.6z"/></svg><span>Western Front</span></div>
-      <div class="goal" id="goal"><span class="k">Goal</span><span id="goal-text">Capture a rail hub and hold it</span></div>
+      <div class="goal" id="goal" title="Your goal: capture a rail hub behind the enemy lines and hold it for a turn"><span id="goal-text">Capture a rail hub and hold it</span></div>
       <ol class="timeline" id="timeline" aria-label="Progress through the war"></ol>
       <div class="stats">
-        <div class="stat" title="Total soldiers lost so far"><span class="k">Soldiers lost</span><b id="cas">0</b></div>
-        <div class="stat" title="If the home front loses heart, the war is lost"><span class="k">Home-front morale</span>
+        <div class="stat" title="Total soldiers lost so far"><span class="k">Lost</span><b id="cas">0</b></div>
+        <div class="stat" title="If the home front loses heart, the war is lost"><span class="k">Morale</span>
           <span class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="mor-bar"><i id="mor-fill"></i></span></div>
       </div>
       <div class="tools">
+        <button id="btn-menu" type="button" title="Back to the main menu">Menu</button>
         <button id="btn-zoom" type="button" title="Make the map bigger">Zoom: Fit</button>
-        <button id="btn-full" type="button" title="Full screen gives the map the most room">Full screen</button>
+        <button id="btn-full" type="button" title="Full screen gives the map the most room">Fullscreen</button>
         <button id="btn-sound" type="button" title="Sound effects">Sound off</button>
         <button id="btn-help" type="button" title="How to play">? Help</button>
       </div>
@@ -45,9 +46,27 @@
         <div id="recruit"></div>
         <button id="endturn" type="button" class="endturn"><span>End Turn</span><small id="idle"></small></button>
         <details id="logbox" open><summary>Battle log</summary><ol id="log" aria-live="polite"></ol></details>
-        <button id="newgame" type="button" class="link">Restart game</button>
+        <button id="newgame" type="button" class="link">Main menu</button>
       </aside>
     </main>
+  </div>
+
+  <div id="menu" hidden>
+    <div class="menu-card" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+      <div class="menu-kicker">1914 – 1918</div>
+      <h1 id="menu-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5 14.9 8.6 22.5 9.2 16.7 14.2 18.5 21.6 12 17.6 5.5 21.6 7.3 14.2 1.5 9.2 9.1 8.6z"/></svg>Western Front</h1>
+      <p class="menu-tag">Dig in to survive. Then work out how anyone could possibly win.</p>
+      <div class="menu-buttons">
+        <button id="menu-continue" type="button" class="menu-btn primary"><b>Continue</b><span id="menu-continue-sub"></span></button>
+        <button id="menu-new" type="button" class="menu-btn"><b>New game</b><span>Choose the Allies or Germany</span></button>
+        <button id="menu-help" type="button" class="menu-btn"><b>How to play</b><span>A one-minute guide</span></button>
+      </div>
+      <details class="menu-opts"><summary>Teacher options</summary>
+        <label for="menu-length">Game length for new games</label>
+        <select id="menu-length"><option value="6">Full: 6 turns a year (about 20 minutes)</option><option value="4">Short: 4 turns a year (about 13 minutes)</option><option value="3">Quick: 3 turns a year (about 10 minutes)</option></select>
+        <p class="menu-note">Saved games keep the length they started with. Nothing is collected or sent anywhere.</p>
+      </details>
+    </div>
   </div>
 
   <div id="overlay" hidden>
