@@ -35,37 +35,37 @@ WF.CONFIG = {
   maxStrength: 10,          // 1 point = 1,000 men
   menPerStrength: 1000,
   units: {
-    infantry:  { name: 'Infantry',      move: 2, startStrength: 6, year: 1914,
+    infantry:  { name: 'Infantry',      move: 2, startStrength: 10, year: 1914,
       role: 'Moves, attacks, digs and captures squares.' },
-    machinegun:{ name: 'Machine Gun',   move: 1, startStrength: 4, year: 1914,
+    machinegun:{ name: 'Machine Gun',   move: 1, startStrength: 5, year: 1914,
       role: 'Devastating fire on open squares within 2. Weak in close attack.' },
     artillery: { name: 'Artillery',     move: 1, startStrength: 5, year: 1914,
       role: 'Bombards squares within 4. Never captures ground. Creates craters.' },
     gas:       { name: 'Gas Company',   move: 1, startStrength: 3, year: 1915,
       role: 'One-time gas attack on a 3-square area.' },
-    tank:      { name: 'Tank',          move: 1, startStrength: 4, year: 1917,
+    tank:      { name: 'Tank',          move: 1, startStrength: 6, year: 1917,
       role: 'Crosses wire and trenches, protects adjacent infantry. May break down.' },
-    storm:     { name: 'Stormtroopers', move: 3, startStrength: 4, year: 1918,
+    storm:     { name: 'Stormtroopers', move: 3, startStrength: 6, year: 1918,
       role: 'Infiltration: can move past an enemy square instead of stopping.' },
   },
 
   // ---- Starting forces (1914). r = row, c = column, s = strength ----
   startingForces: {
     allied: [
-      { t: 'infantry', r: 2,  c: 3, s: 6 }, { t: 'infantry', r: 5,  c: 3, s: 6 },
-      { t: 'infantry', r: 8,  c: 3, s: 6 }, { t: 'infantry', r: 11, c: 3, s: 6 },
-      { t: 'infantry', r: 14, c: 3, s: 6 },
+      { t: 'infantry', r: 2,  c: 3, s: 10 }, { t: 'infantry', r: 5,  c: 3, s: 10 },
+      { t: 'infantry', r: 8,  c: 3, s: 10 }, { t: 'infantry', r: 11, c: 3, s: 10 },
+      { t: 'infantry', r: 14, c: 3, s: 10 },
       { t: 'machinegun', r: 5,  c: 2 },     { t: 'machinegun', r: 11, c: 2 },
       { t: 'artillery',  r: 7,  c: 1 },     { t: 'artillery',  r: 9,  c: 1 },
     ],
     german: [
-      { t: 'infantry', r: 2,  c: 8, s: 6 }, { t: 'infantry', r: 5,  c: 8, s: 6 },
-      { t: 'infantry', r: 8,  c: 8, s: 6 }, { t: 'infantry', r: 11, c: 8, s: 6 },
-      { t: 'infantry', r: 14, c: 8, s: 6 },
+      { t: 'infantry', r: 2,  c: 8, s: 10 }, { t: 'infantry', r: 5,  c: 8, s: 10 },
+      { t: 'infantry', r: 8,  c: 8, s: 10 }, { t: 'infantry', r: 11, c: 8, s: 10 },
+      { t: 'infantry', r: 14, c: 8, s: 10 },
       { t: 'machinegun', r: 4,  c: 8 },     { t: 'machinegun', r: 12, c: 8 },
       { t: 'artillery',  r: 7,  c: 9 },     { t: 'artillery',  r: 9,  c: 9 },
-      { t: 'infantry', r: 6,  c: 10, s: 6 }, { t: 'infantry', r: 10, c: 10, s: 6 },  // rail reserves
-      { t: 'infantry', r: 4,  c: 10, s: 6 }, { t: 'infantry', r: 11, c: 10, s: 6 },  // hub guards
+      { t: 'infantry', r: 6,  c: 10, s: 10 }, { t: 'infantry', r: 10, c: 10, s: 10 },  // rail reserves
+      { t: 'infantry', r: 4,  c: 10, s: 10 }, { t: 'infantry', r: 11, c: 10, s: 10 },  // hub guards
     ],
   },
 
@@ -85,25 +85,34 @@ WF.CONFIG = {
     creepingFrom: 1917,
     capturers: ['infantry', 'storm', 'tank'], // units that advance into a square they clear
   },
-  machineGun: { damagePerStrength: 0.75 },
+  machineGun: { damagePerStrength: 1.0 },
   bombard: {
-    short: { damage: 3, craterChance: 0.25, wireClear: 1 },
-    long:  { damage: 7, adjacentDamage: 3, unlockYear: 1916 },
+    short: { damage: 4, craterChance: 0.25, wireClear: 1 },
+    long:  { damage: 10, adjacentDamage: 4, unlockYear: 1916 },
   },
-  gas: { firstUse: 6, later: 3, masked: 1, areaRows: 1, unlockYear: 1915 },
+  gas: { firstUse: 9, later: 4, masked: 1, areaRows: 1, unlockYear: 1915 },
   tank: { breakdown: 0.3, breakdownCountered: 0.4 },
   rail: { squaresPerTurn: 6 },
   counters: { gasMasksFrom: 1917, antiTankFrom: 1918 },
-  recruitCost: { infantry: 6, machinegun: 4, artillery: 5, gas: 3, tank: 4, storm: 4 },
+  recruitCost: { infantry: 10, machinegun: 5, artillery: 5, gas: 3, tank: 6, storm: 6 },
 
   // ---- Computer opponent ----
   ai: {
     reserveCap: 2,               // rail reserves sent to a lost trench per turn
-    minReserveCap: 1,            // even an exhausted army can send this many
-    exhaustFloor: 3,             // exhaustion never shrinks a reserve below this strength
+    minReserveCap: 2,            // even an exhausted army can send this many
+    exhaustFloor: 5,             // exhaustion never shrinks a reserve below this strength
     maxExtendPerTurn: 2,         // flank-matching reserves sent per turn
     artilleryChance: 0.7,
-    attackRatio: 1.0,            // attacks an adjacent unit in the open if damage dealt >= ratio x taken
+    attackRatio: 1.0,            // base: attacks an adjacent unit in the open if damage dealt >= ratio x taken
+    // How hard the computer pushes, 0 to 1, by the army it plays. Higher = accepts worse odds,
+    // shells more often and sends bigger local attacks.
+    aggression: { german: 0.7, allied: 0.35 },
+    pushUnits: 2,                // base attackers in a local push (plus up to 3 more at full aggression)
+    // Local offensives by year and turn, for the army the computer plays.
+    pushes: {
+      german: { 1914: [4, 5], 1915: [3, 5], 1916: [1, 2, 4], 1917: [4], 1918: [] },
+      allied: { 1915: [5], 1916: [4, 5], 1917: [2, 3], 1918: [] },
+    },
     baselineDigTurn: 3,          // game turn (1914) after which the front digs in on its own
     trenchGoalByYear: { 1914: 1, 1915: 2, 1916: 3, 1917: 3, 1918: 3 },
     hubReserveAttacksSameTurn: true,
@@ -114,9 +123,9 @@ WF.CONFIG = {
 
   // ---- Home front ----
   startMorale: 100,
-  morale: { perStrength: 0.55, failedOffensiveLoss: 3, failedOffensiveExtra: 3, yearHit: { 1917: 5 } },
-  manpowerByYear: { 1914: 6, 1915: 12, 1916: 24, 1917: 12, 1918: 20 },
-  americans: { year: 1918, count: 2, strength: 8 },
+  morale: { perStrength: 0.4, failedOffensiveLoss: 4, failedOffensiveExtra: 3, yearHit: { 1917: 5 } },
+  manpowerByYear: { 1914: 10, 1915: 18, 1916: 36, 1917: 18, 1918: 30 },
+  americans: { year: 1918, count: 2, strength: 10 },
   alliedFront: 3,                // columns <= this start Allied-owned
 
   saveKey: 'westernfront-save-v3',

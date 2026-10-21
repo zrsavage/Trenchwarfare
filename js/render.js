@@ -474,9 +474,9 @@ WF.Render = (function () {
     const str = sp.hold ? sp.ds : u.strength, max = Math.max(u.max || 10, str), ratio = clamp01(str / 10), bw = S * 0.74, bh = Math.max(4, S * 0.08), bx = x - bw / 2, by = y + S * 0.41;
     ctx.fillStyle = 'rgba(0,0,0,.65)'; roundRect(bx - 1.5, by - 1.5, bw + 3, bh + 3, 3); ctx.fill();
     ctx.fillStyle = ratio > 0.55 ? '#62d04f' : ratio > 0.3 ? '#f2c230' : '#f0483c'; ctx.fillRect(bx, by, bw * ratio, bh);
-    const nr = S * 0.16, nx = x + S * 0.34, ny = y - S * 0.34;
+    const nr = S * 0.17, nx = x + S * 0.34, ny = y - S * 0.34;
     ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(nx, ny, nr, 0, TAU); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#111'; ctx.font = '800 ' + Math.round(nr * 1.25) + 'px Atkinson Hyperlegible, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(Math.max(0, Math.round(str))), nx, ny + 0.5);
+    const sv = Math.max(0, Math.round(str)); ctx.fillStyle = '#111'; ctx.font = '800 ' + Math.round(nr * (sv >= 10 ? 0.98 : 1.25)) + 'px Atkinson Hyperlegible, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(Math.max(0, Math.round(str))), nx, ny + 0.5);
     if (u.acted && u.side === 'allied' && !sp.dying) { ctx.fillStyle = '#7be07b'; ctx.font = '800 ' + Math.round(S * 0.26) + 'px sans-serif'; ctx.fillText('✓', x - S * 0.3, y - S * 0.3); }
     if (u.broken) { ctx.fillStyle = '#ff4a3c'; ctx.font = '800 ' + Math.round(S * 0.36) + 'px sans-serif'; ctx.fillText('✕', x, y); }
     ctx.restore();

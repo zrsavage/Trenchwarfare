@@ -5,6 +5,7 @@ globalThis.WF = globalThis.WF || {};
 WF.AI = (function () {
   const C = WF.CONFIG, M = WF.Map, U = WF.Units, K = WF.Combat, A = C.ai, N = WF.Names;
   const stat = g => K.stat(g);
+  const aggr = g => A.aggression[N.faction(g, 'german')] || 0;
   const offTurns = g => (g.player === 'german' ? A.offensiveTurnsVsGerman : A.offensiveTurns);
   const rnd = () => (WF.rand || Math.random)();
   const germans = g => g.units.filter(u => u.side === 'german');
@@ -156,20 +157,49 @@ WF.AI = (function () {
     }
   }
 
-  // Cautious: only attacks an adjacent unit caught in the open if it is a good trade.
+  // Attacks an adjacent unit if the trade is good enough. A more aggressive army accepts worse odds
+  // and will hit units in a shallow trench too.
   function opportunistic(g) {
+    const ag = aggr(g), ratio = Math.max(0.5, A.attackRatio - 0.5 * ag);
     for (const u of germans(g).filter(x => free(x) && (x.type === 'infantry' || x.type === 'storm'))) {
       if (!g.units.includes(u)) continue;
-      const t = K.attackTargets(g, u).find(x => g.map[x.r][x.c].trench === 0);
+      const t = K.attackTargets(g, u).find(x => g.map[x.r][x.c].trench === 0 || (ag >= 0.6 && g.map[x.r][x.c].trench === 1));
       if (!t) continue;
       const e = K.estimate(g, u, t);
-      if (e.toDef >= e.toAtt * A.attackRatio && e.toDef >= 1) K.attack(g, u, t);
+      if (e.toDef >= e.toAtt * ratio && e.toDef >= 1) K.attack(g, u, t);
+    }
+  }
+
+  // A local offensive (Ypres, Verdun, the Somme, Arras...): shell one sector, then send
+  // several units at it. Usually costs the attacker more than the defender.
+  function push(g) {
+    const ag = aggr(g);
+    const targets = allies(g).filter(u => u.type !== 'artillery' && u.type !== 'gas')
+      .sort((a, b) => (g.map[a.r][a.c].trench - g.map[b.r][b.c].trench) || (b.c - a.c));
+    const target = targets[0];
+    if (!target) return;
+    const where = M.label(target.r, target.c);
+    K.say(g, N.foe(g) + ' launches an attack near ' + where + '.', 'enemy',
+      'Both armies launched local offensives to gain ground or relieve pressure elsewhere. Attacking across open ground against defenders who had dug in usually cost the attackers more men than the defenders.');
+    for (const art of germans(g).filter(u => u.type === 'artillery' && free(u))) {
+      if (!K.inRange(art, target.r, target.c, C.ranges.artillery)) continue;
+      K.bombard(g, art, target.r, target.c, g.year >= C.bombard.long.unlockYear && ag > 0.5 ? 'long' : 'short');
+    }
+    const n = Math.min(5, Math.round(A.pushUnits + 3 * ag));
+    const pool = germans(g).filter(u => free(u) && FIGHTERS.includes(u.type) && !isReserve(u))
+      .sort((a, b) => M.distance(a.r, a.c, target.r, target.c) - M.distance(b.r, b.c, target.r, target.c)).slice(0, n);
+    for (const u of pool) {
+      if (!g.units.includes(u) || u.acted) continue;
+      u.mission = null;
+      const adj = K.attackTargets(g, u);
+      if (adj.length) { K.attack(g, u, adj.find(x => x === target) || adj.sort((a, b) => a.strength - b.strength)[0]); continue; }
+      moveToward(g, u, target.r, target.c);
     }
   }
 
   function artillery(g, heavy) {
     for (const art of germans(g).filter(u => u.type === 'artillery' && free(u))) {
-      if (!heavy && rnd() > A.artilleryChance) continue;
+      if (!heavy && rnd() > Math.min(1, A.artilleryChance + 0.3 * aggr(g))) continue;
       const targets = allies(g).filter(t => K.inRange(art, t.r, t.c, C.ranges.artillery));
       if (!targets.length) continue;
       targets.sort((a, b) => (g.map[a.r][a.c].trench - g.map[b.r][b.c].trench) || (b.strength - a.strength));
@@ -218,6 +248,8 @@ WF.AI = (function () {
         K.say(g, N.foe(g) + ' reserves move toward ' + M.label(g.warn.r, g.warn.c) + '.', 'enemy', 'Your long bombardment warned them where the attack would come, so they sent reserves there. Before the Somme, a week of shelling did the same.');
         g.warn = null;
       }
+      const pushTurn = ((A.pushes[N.faction(g, 'german')] || {})[g.year] || []).includes(g.turn);
+      if (pushTurn) push(g);
       for (const u of germans(g)) runMission(g, u);
       counterattack(g, ctx);
       mirrorDig(g);

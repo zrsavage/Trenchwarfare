@@ -55,11 +55,14 @@ All tunable in `js/config.js`:
 - Ground gained = squares beyond your starting line (column D) that you currently own. A square flips to the Germans if they move into it.
 - A breakthrough means an Allied unit starts a German turn on a rail hub and is still there after it.
 
-## Balance (first pass, from `node tests/sim.js`)
+## Balance (from `node tests/sim.js 40` and `... 40 german`)
 
-- Marching in the open and never digging: loses about 45 of 48 starting strength points.
-- Digging everywhere and never attacking: zero casualties, zero ground, armistice.
-- A scripted 1918 combined-arms bot (long barrages, tanks, stormtroopers on a hub) broke through about half the time. Human players are expected to do worse; tune `ai.*`, `recruitCost` and `manpowerByYear` in `config.js` if it is too easy in classroom testing.
+Fresh infantry are strength 10 (10,000 men); machine guns, artillery, tanks and stormtroopers are 5, 5, 6 and 6. Damage values, manpower pools and morale loss are scaled to match.
+
+- Marching in the open and never digging: loses about 65 of 68 starting strength points.
+- Digging everywhere and never attacking: a few points of casualties from the computer's local attacks, zero ground gained, armistice.
+- A scripted 1918 combined-arms bot breaks through about 40% of the time (Allies) and 35% (Germany). Human players are expected to do worse.
+- Computer aggression is set per army in `ai.aggression`: German 0.7, Allied 0.35. Higher means worse odds accepted, more shelling, and bigger local attacks (`ai.pushes` lists them by year and turn). Against a fully dug-in player the German computer launches about 8 local attacks per game and loses far more than it inflicts.
 
 ## Tests
 
