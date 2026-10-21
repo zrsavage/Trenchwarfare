@@ -118,5 +118,5 @@ WF.CONFIG = {
   americans: { year: 1918, count: 2, strength: 8 },
   alliedFront: 3,                // columns <= this start Allied-owned
 
-  saveKey: 'westernfront-save-v2',
+  saveKey: 'westernfront-save-v3',
 };

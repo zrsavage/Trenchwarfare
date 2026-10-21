@@ -1,7 +1,8 @@
 // Headless bot simulation for balance checks. Usage: node tests/sim.js [runs]
 const fs = require('fs'), vm = require('vm');
-for (const f of ['config','map','units','years','combat','ai','main']) vm.runInThisContext(fs.readFileSync(__dirname + '/../js/' + f + '.js', 'utf8'));
-WF.UI = { init(){}, render(){}, showOverlay(){}, showEnd(s){ WF._end = s; } };
+for (const f of ['config','map','units','years','combat','ai','coach','main']) vm.runInThisContext(fs.readFileSync(__dirname + '/../js/' + f + '.js', 'utf8'));
+WF.UI = { init(){}, render(){}, showTip(){}, hideTip(){}, banner(){}, card(){}, endScreen(s){ WF._end = s; } };
+WF.Render = { enqueue(){}, setView(){}, whenIdle(cb){ cb(); } }; WF.Audio = { play(){}, isMuted(){ return true; } };
 globalThis.localStorage = { setItem(){}, getItem(){ return null; }, removeItem(){} };
 const { CONFIG: C, Map: M, Units: U, Combat: K } = WF;
 let seed = 1; WF.rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };

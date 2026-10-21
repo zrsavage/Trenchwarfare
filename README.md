@@ -23,11 +23,18 @@ All six phases from `DESIGN.md` are implemented.
 
 ## How to play
 
-Click a blue unit, then use the action buttons: **Move** (click a dashed square), **Attack** (adjacent enemy), **Dig**, **Bombard / Long Barrage / Gas** (click a target in range), **Hold** (recovers 1 strength in a trench). **Recruit** spends your manpower pool on new units in the Allied rear. **End Turn** lets machine guns fire and the Germans move.
+Designed so a high schooler can play with no instructions:
 
-Tick "Always show machine-gun kill zones" to see the red squares at all times.
+- A short briefing card gives the goal: capture a gold-star rail hub and hold it.
+- A "sergeant" panel tells you what to do next in plain language, points at the right square with a yellow arrow, and walks through the first turns (select, move, dig in, end turn).
+- Click a blue unit. Glowing squares show where it can walk; red targets are enemies it can attack. Hover a target to see the odds ("Good", "Even", "Terrible") before you commit.
+- Buttons appear only for the selected unit: Dig in, Rest, Shell, Long barrage, Gas. Reinforcements are bought from the tray and placed in your rear.
+- Red hatched squares are machine-gun fire zones; units standing in them get a pulsing red ring.
+- The map is drawn on a canvas with animated units, shells, tracers, dust and gas. Sound effects (synthesized, off by default) can be turned on in the header. Zoom, Help and keyboard play (arrow keys, Enter, Esc, E to end the turn) are available.
 
 Teacher option: add `?turns=4` to the URL for 4 turns per year (2 to 6 allowed).
+
+The map is drawn rotated to fit landscape screens: Allied rear at the bottom, Germans at the top, English Channel on the left, Switzerland on the right. The rules still use the 16 x 12 grid from `DESIGN.md`.
 
 ## Rule choices the design doc left open
 
@@ -67,7 +74,10 @@ js/units.js    unit creation, movement, kill zones
 js/years.js    year cards, notes, tutorial hints, end screen data
 js/combat.js   attacks, machine guns, bombardment, gas, digging
 js/ai.js       computer opponent
-js/ui.js       rendering and DOM events
+js/render.js   canvas battlefield, sprites, animations, mouse/keyboard input
+js/audio.js    synthesized sound effects
+js/coach.js    sergeant hints and the opening tutorial
+js/ui.js       HUD, panels, dialogs and tooltips
 js/main.js     game state, turn order, input
 DESIGN.md      the full design document
 ```

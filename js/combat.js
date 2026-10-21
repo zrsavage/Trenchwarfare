@@ -17,6 +17,8 @@ WF.Combat = (function () {
   function lose(g, u, pts) {
     pts = Math.max(0, Math.min(pts, u.strength));
     u.strength -= pts;
+    if (pts > 0) WF.emit(g, { t: 'hit', id: u.id, r: u.r, c: u.c, n: pts, side: u.side });
+    if (u.strength <= 0) WF.emit(g, { t: 'die', id: u.id });
     if (u.side === 'allied') {
       g.casualties += pts;
       g.morale = Math.max(0, g.morale - pts * C.morale.perStrength);
@@ -68,6 +70,7 @@ WF.Combat = (function () {
   function attack(g, att, def) {
     const e = estimate(g, att, def);
     const where = label(def), ownAttack = att.side === 'allied';
+    WF.emit(g, { t: 'melee', a: att.id, from: { r: att.r, c: att.c }, to: { r: def.r, c: def.c } });
     const dealt = lose(g, def, sround(e.toDef));
     const taken = lose(g, att, sround(e.toAtt));
     att.acted = true;
@@ -106,6 +109,7 @@ WF.Combat = (function () {
     for (const mg of g.units.filter(u => u.type === 'machinegun' && u.side === side)) {
       for (const t of g.units.filter(u => u.side !== side)) {
         if (cellOf(g, t).trench > 0 || M.distance(mg.r, mg.c, t.r, t.c) > range) continue;
+        WF.emit(g, { t: 'mg', from: { r: mg.r, c: mg.c }, to: { r: t.r, c: t.c } });
         let raw = mg.strength * C.machineGun.damagePerStrength;
         if (t.type === 'tank') raw *= 1 - K.tankMgImmunity;
         total += hurt(g, t, raw, true);
@@ -127,6 +131,7 @@ WF.Combat = (function () {
     for (const [r, c] of cells) {
       const cell = g.map[r][c], center = r === tr && c === tc;
       const raw = long ? (center ? B.long.damage : B.long.adjacentDamage) : B.short.damage;
+      WF.emit(g, { t: 'shell', r, c, big: long && center, from: { r: art.r, c: art.c } });
       const u = U.at(g, r, c);
       if (u) { casual += hurt(g, u, raw); hits++; }
       if (long || center) cell.wire = false;
@@ -146,6 +151,7 @@ WF.Combat = (function () {
     const first = !g.techUsed.gas;
     const dmg = first ? C.gas.firstUse : (g.counters.gasMasks ? C.gas.masked : C.gas.later);
     let casual = 0;
+    WF.emit(g, { t: 'gas', r: tr, c: tc, rows: C.gas.areaRows });
     for (let dr = -C.gas.areaRows; dr <= C.gas.areaRows; dr++) {
       const r = tr + dr;
       if (!M.inBounds(r, tc)) continue;
@@ -166,6 +172,7 @@ WF.Combat = (function () {
     const cell = cellOf(g, u);
     if (!canDig(g, u)) return false;
     cell.trench++;
+    WF.emit(g, { t: 'dig', r: u.r, c: u.c });
     if (!cell.dugBy) cell.dugBy = u.side;
     u.acted = true;
     if (u.side === 'allied') {
@@ -177,7 +184,7 @@ WF.Combat = (function () {
 
   function hold(g, u) {
     u.acted = true;
-    if (cellOf(g, u).trench > 0 && u.strength < u.max) { u.strength++; return true; }
+    if (cellOf(g, u).trench > 0 && u.strength < u.max) { u.strength++; WF.emit(g, { t: 'heal', id: u.id, r: u.r, c: u.c }); return true; }
     return false;
   }
 

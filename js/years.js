@@ -122,7 +122,7 @@ WF.Years = (function () {
         ['Total casualties (men)', men.toLocaleString()],
         ['German casualties (men)', (g.gCasualties * C.menPerStrength).toLocaleString()],
         ['Squares of ground gained', gained],
-        ['Farthest advance', g.farthest >= 4 ? 'Column ' + 'ABCDEFGHIJKL'[g.farthest] : 'None beyond your starting line'],
+        ['Farthest advance', g.farthest >= 4 ? 'Column ' + 'ABCDEFGHIJKL'[g.farthest] : 'Not past your line'],
         ['Casualties per square gained', per ? per.toLocaleString() : 'n/a'],
         ['Final morale', Math.round(g.morale)],
       ],

@@ -1,6 +1,9 @@
 // Unit types, creation, and movement rules.
 globalThis.WF = globalThis.WF || {};
 
+// Animation events: the renderer replays these. Harmless when game.events is absent (tests).
+WF.emit = function (g, ev) { if (g && g.events) g.events.push(ev); };
+
 WF.Units = (function () {
   const C = WF.CONFIG;
   const M = WF.Map;

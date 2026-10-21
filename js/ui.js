@@ -1,210 +1,179 @@
-// Rendering and DOM event wiring. No game rules live here.
+// DOM panels: HUD, sergeant, unit card, action buttons, recruits, log, dialogs, tooltip.
+// No game rules live here.
 globalThis.WF = globalThis.WF || {};
 
 WF.UI = (function () {
   const C = WF.CONFIG, M = WF.Map, U = WF.Units;
   const $ = id => document.getElementById(id);
-  const cellEls = [];
-  let handlers = {};
+  let handlers = {}, bannerTimer = null, lastLogLen = -1;
+  const SIDE = { allied: 'Allied', german: 'German' };
+  const ICON = {
+    dig: 'M17.5 2.5l4 4-2 2-4-4zM14.5 5.5l4 4L11 17.5 6.5 19l-1-1.5L7 13z',
+    rest: 'M6 4h4v16H6zM14 4h4v16h-4z',
+    move: 'M12 2l7 8h-4.5v12h-5V10H5z',
+    long: 'M2.5 14.5 15 5.2l2.4 3.1L5 17.6zM21 3l1 5-2-1-2 3-1-5 2 1z',
+  };
+  const glyph = (key, cls) => '<svg class="' + (cls || 'ico') + '" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="' + (WF.GLYPH[key] || ICON[key]) + '"/></svg>';
+  const unitGlyph = u => glyph(u.type === 'infantry' ? (u.side === 'allied' ? 'infantryAllied' : 'infantryGerman') : u.type);
+  const typeGlyph = t => glyph(t === 'infantry' ? 'infantryAllied' : t);
 
-  const SIDE_NAME = { allied: 'Allied', german: 'German' };
-
-  function build() {
-    const grid = $('grid');
-    grid.style.gridTemplateColumns = 'repeat(' + C.cols + ', var(--cell))';
-    grid.innerHTML = '';
-    for (let r = 0; r < C.rows; r++) {
-      cellEls[r] = [];
-      for (let c = 0; c < C.cols; c++) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'cell';
-        b.dataset.r = r; b.dataset.c = c;
-        b.tabIndex = (r === 0 && c === 0) ? 0 : -1;
-        grid.appendChild(b);
-        cellEls[r][c] = b;
-      }
-    }
-    grid.addEventListener('click', e => {
-      const b = e.target.closest('.cell');
-      if (b) handlers.onCell(+b.dataset.r, +b.dataset.c);
-    });
-    // Arrow keys move between sectors (roving tabindex); Enter/Space click natively.
-    grid.addEventListener('keydown', e => {
-      const b = e.target.closest('.cell');
-      if (!b) return;
-      const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
-      if (!d) return;
-      const r = +b.dataset.r + d[0], c = +b.dataset.c + d[1];
-      if (!M.inBounds(r, c)) return;
-      e.preventDefault();
-      b.tabIndex = -1; cellEls[r][c].tabIndex = 0; cellEls[r][c].focus();
-    });
-    $('actions').addEventListener('click', e => {
-      const b = e.target.closest('button[data-action]');
-      if (b && !b.disabled) handlers.onAction(b.dataset.action);
-    });
-    $('show-zones').addEventListener('change', e => handlers.onToggleZones(e.target.checked));
+  function init(h) {
+    handlers = h;
+    $('endturn').addEventListener('click', () => handlers.onEndTurn());
+    $('btn-help').addEventListener('click', () => handlers.onHelp());
+    $('btn-zoom').addEventListener('click', () => handlers.onZoom());
+    $('btn-sound').addEventListener('click', () => handlers.onSound());
     $('newgame').addEventListener('click', () => handlers.onNewGame());
-  }
-
-  function init(h) { handlers = h; build(); }
-
-  function unitHtml(u) {
-    const def = C.units[u.type];
-    return '<span class="unit ' + u.side + (u.acted ? ' acted' : '') + (u.broken ? ' broken' : '') + '" title="' +
-      SIDE_NAME[u.side] + ' ' + def.name + '">' +
-      '<svg class="ico" aria-hidden="true"><use href="#i-' + u.type + '"/></svg>' +
-      '<span class="str">' + u.strength + '</span></span>';
-  }
-
-  function cellLabel(game, r, c) {
-    const cell = game.map[r][c], u = U.at(game, r, c);
-    let s = 'Sector ' + M.label(r, c) + ', ' + M.describe(cell);
-    if (u) s += ', ' + SIDE_NAME[u.side] + ' ' + C.units[u.type].name + ' strength ' + u.strength;
-    return s;
-  }
-
-  function renderCells(game, view) {
-    const sel = view.selected;
-    for (let r = 0; r < C.rows; r++) {
-      for (let c = 0; c < C.cols; c++) {
-        const cell = game.map[r][c], u = U.at(game, r, c), k = r + ',' + c;
-        const cls = ['cell', M.zone(c)];
-        if (cell.wire) cls.push('has-wire');
-        if (cell.crater) cls.push('has-crater');
-        if (cell.rail) cls.push('has-rail');
-        if (view.kill && view.kill.has(k)) cls.push('kill');
-        if (sel && sel.r === r && sel.c === c) cls.push('selected');
-        const reach = view.reach && view.reach.get(k);
-        if (reach) cls.push('reach');
-        const tg = view.targets && view.targets.get(k);
-        if (tg) cls.push('target-' + tg);
-        if (view.place && view.place.has(k)) cls.push('reach');
-        if (view.inspect && view.inspect.r === r && view.inspect.c === c) cls.push('inspect');
-
-        let h = '';
-        if (cell.trench) {
-          h += '<span class="trench">' + '<i></i>'.repeat(cell.trench) + '</span>';
-        }
-        if (cell.hub) h += '<svg class="hub" aria-hidden="true"><use href="#i-hub"/></svg>';
-        if (u) h += unitHtml(u);
-        else if (reach) h += '<span class="cost">' + reach.cost + '</span>';
-        h += '<span class="coord">' + M.label(r, c) + '</span>';
-
-        const el = cellEls[r][c];
-        el.className = cls.join(' ');
-        el.innerHTML = h;
-        el.setAttribute('aria-label', cellLabel(game, r, c));
-      }
-    }
-  }
-
-  function renderInfo(game, view) {
-    const box = $('info');
-    const u = view.selected;
-    const coach = view.coach ? '<p class="coach">' + view.coach + '</p>' : '';
-    if (u) {
-      const def = C.units[u.type], cell = game.map[u.r][u.c];
-      const status = u.side !== 'allied' ? 'Enemy unit'
-        : u.acted ? 'Already acted this turn' : 'Ready';
-      box.innerHTML =
-        '<h2>' + SIDE_NAME[u.side] + ' ' + def.name + '</h2>' +
-        '<dl><dt>Strength</dt><dd>' + u.strength + ' / ' + C.maxStrength + ' (' + U.men(u).toLocaleString() + ' men)</dd>' +
-        '<dt>Move</dt><dd>' + def.move + '</dd>' +
-        '<dt>Sector</dt><dd>' + M.label(u.r, u.c) + ' &mdash; ' + M.describe(cell) + '</dd>' +
-        '<dt>Status</dt><dd>' + (u.broken ? 'Broken down' : status) + '</dd></dl>' +
-        '<p>' + def.role + '</p>' + coach;
-    } else if (view.inspect) {
-      const { r, c } = view.inspect;
-      box.innerHTML = '<h2>Sector ' + M.label(r, c) + '</h2><p>' + cap(M.describe(game.map[r][c])) + '.</p>' + coach;
-    } else {
-      box.innerHTML = '<h2>Your move</h2><p>Click one of your blue units to select it, then click a marked square to move there. ' +
-        'Each unit gets one action per turn. Press <b>End Turn</b> when you are done.</p>' + coach;
-    }
+    $('actions').addEventListener('click', e => { const b = e.target.closest('button[data-a]'); if (b && !b.disabled) handlers.onAction(b.dataset.a); });
+    $('recruit').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b && !b.disabled) handlers.onRecruit(b.dataset.t); });
+    document.addEventListener('keydown', e => {
+      if ($('overlay').hidden && (e.key === 'e' || e.key === 'E') && !e.ctrlKey && !e.metaKey && !/input|textarea/i.test(e.target.tagName)) handlers.onEndTurn();
+    });
   }
 
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 
-  function renderLog(game) {
-    const ol = $('log');
-    ol.innerHTML = '';
-    for (const m of game.log.slice(-40)) {
-      const li = document.createElement('li');
-      li.textContent = m.text;
-      if (m.kind) li.className = m.kind;
-      ol.appendChild(li);
+  function renderHud(g, v) {
+    // timeline of years
+    const tl = $('timeline'); let h = '';
+    for (let y = C.startYear; y <= C.endYear; y++) {
+      const cls = y < g.year ? 'done' : y === g.year ? 'now' : '';
+      let pips = '';
+      if (y === g.year) { for (let i = 1; i <= C.turnsPerYear; i++) pips += '<i class="' + (i < g.turn ? 'p done' : i === g.turn ? 'p now' : 'p') + '"></i>'; }
+      h += '<li class="' + cls + '"><span>' + y + '</span>' + (pips ? '<span class="pips">' + pips + '</span>' : '') + '</li>';
     }
+    tl.innerHTML = h;
+    $('cas').textContent = (g.casualties * C.menPerStrength).toLocaleString();
+    const m = Math.max(0, Math.round(g.morale));
+    $('mor-fill').style.width = m + '%';
+    $('mor-fill').className = m > 60 ? '' : m > 30 ? 'mid' : 'low';
+    $('mor-bar').setAttribute('aria-valuenow', m);
+    $('mor-bar').title = 'Home-front morale: ' + m + '%';
+    // goal distance
+    let best = null;
+    for (const u of g.units) if (u.side === 'allied' && u.type !== 'artillery' && u.type !== 'gas') for (const hub of C.hubs) { const d = M.distance(u.r, u.c, hub.r, hub.c); if (best === null || d < best) best = d; }
+    $('goal-text').innerHTML = best === 0 ? 'On the hub! <b>Hold it through the German turn.</b>' : 'Capture a \u2605 rail hub' + (best !== null ? ' <b>(' + best + ' away)</b>' : '');
+    const sb = $('btn-sound'); sb.textContent = WF.Audio.isMuted() ? 'Sound off' : 'Sound on';
+  }
+
+  function renderAdvisor(adv) {
+    const a = $('advisor');
+    a.className = 'advisor ' + (adv.tone || 'info');
+    const html = adv.text;
+    if ($('advice').innerHTML !== html) $('advice').innerHTML = html;
+  }
+
+  function renderUnitCard(g, v) {
+    const u = v.selected, box = $('unitcard');
+    if (!u) { box.hidden = true; return; }
+    box.hidden = false;
+    const def = C.units[u.type], cell = g.map[u.r][u.c];
+    let status = u.side === 'german' ? 'Enemy' : u.broken ? 'Broken down' : u.acted ? 'Done this turn' : 'Ready';
+    const cover = cell.trench ? 'In a trench (level ' + cell.trench + '): ' + [0, 40, 60, 80][cell.trench] + '% less damage' : 'In the open: no protection';
+    box.className = 'card-unit ' + u.side;
+    box.innerHTML = '<div class="uicon">' + unitGlyph(u) + '</div><div class="ubody"><b>' + SIDE[u.side] + ' ' + def.name + '</b>' +
+      '<span class="men">' + (u.strength * C.menPerStrength).toLocaleString() + ' men</span>' +
+      '<span class="meta">' + status + ' · ' + cover + '</span><span class="role">' + def.role + '</span></div>';
+  }
+
+  function btn(a, icon, label, desc, active, disabled) {
+    return '<button type="button" class="abtn' + (active ? ' on' : '') + '" data-a="' + a + '"' + (disabled ? ' disabled' : '') + '>' + glyph(icon) +
+      '<span><b>' + label + '</b><small>' + desc + '</small></span></button>';
+  }
+
+  function renderActions(g, v) {
+    const box = $('actions'), a = v.actions, u = v.selected;
+    if (!u || u.side !== 'allied') { box.innerHTML = ''; box.hidden = true; return; }
+    box.hidden = false;
+    let h = '';
+    if (a.move && (v.mode !== 'move')) h += btn('move', 'move', 'Move instead', 'Walk to a nearby square', false, false);
+    if (a.dig) { const lvl = g.map[u.r][u.c].trench; h += btn('dig', 'dig', 'Dig in', 'Trench level ' + (lvl + 1) + ': ' + [0, 40, 60, 80][lvl + 1] + '% less damage', false, false) + ''; }
+    else if (['infantry', 'machinegun', 'storm'].includes(u.type) && g.map[u.r][u.c].trench >= 3) h += btn('dig', 'dig', 'Fully dug in', 'Maximum trench level', false, true);
+    if (u.type === 'artillery') {
+      h += btn('bombard', 'artillery', 'Shell', 'Hit one square within 4', v.mode === 'bombard', !a.bombard);
+      if (g.year >= C.bombard.long.unlockYear) h += btn('long', 'long', 'Long barrage', 'Heavy damage, but it warns the Germans', v.mode === 'long', !a.long);
+    }
+    if (u.type === 'gas') h += btn('gas', 'gas', 'Gas attack', 'One-time hit on 3 squares', v.mode === 'gas', !a.gas);
+    if (a.hold) h += btn('hold', 'rest', g.map[u.r][u.c].trench ? 'Rest' : 'Skip', g.map[u.r][u.c].trench ? 'Recover 1,000 men in a trench' : 'End this unit\'s turn', false, false);
+    box.innerHTML = h;
+  }
+
+  function renderRecruit(g, v) {
+    const box = $('recruit'); let h = '<div class="rec-head"><b>Reinforcements</b><span>' + g.manpower + ' points</span></div><div class="rec-row">';
+    for (const o of v.recruit) {
+      h += '<button type="button" class="rbtn' + (v.recruitType === o.type ? ' on' : '') + '" data-t="' + o.type + '"' + (o.ok ? '' : ' disabled') + ' title="' + o.name + ': costs ' + o.cost + ' points">' +
+        typeGlyph(o.type) + '<span>' + o.name + '</span><em>' + o.cost + '</em></button>';
+    }
+    box.innerHTML = h + '</div>';
+  }
+
+  function renderLog(g) {
+    const ol = $('log'), msgs = g.log.slice(-30);
+    if (g.log.length === lastLogLen) return;
+    lastLogLen = g.log.length;
+    ol.innerHTML = '';
+    for (const m of msgs) { const li = document.createElement('li'); li.textContent = m.text; if (m.kind) li.className = m.kind; ol.appendChild(li); }
     ol.scrollTop = ol.scrollHeight;
   }
 
-  function render(game, view) {
-    $('year').textContent = game.year;
-    $('turn').textContent = game.turn + '/' + C.turnsPerYear;
-    $('casualties').textContent = (game.casualties * C.menPerStrength).toLocaleString();
-    $('morale').textContent = Math.round(game.morale);
-    $('morale-fill').style.width = Math.max(0, game.morale) + '%';
-    $('morale-bar').setAttribute('aria-valuenow', Math.round(game.morale));
-    $('manpower').textContent = game.manpower;
-    $('show-zones').checked = !!game.showZones;
-
-    renderCells(game, view);
-    renderInfo(game, view);
-    renderLog(game);
-
-    for (const b of document.querySelectorAll('#actions .act')) {
-      const a = b.dataset.action;
-      if (a === 'endturn') { b.disabled = game.over; continue; }
-      b.disabled = !view.actions[a];
-      b.classList.toggle('active', view.mode === a && !b.disabled);
-    }
-    renderRecruit(game, view);
+  function render(g, v, adv) {
+    renderHud(g, v);
+    renderAdvisor(adv);
+    renderUnitCard(g, v);
+    renderActions(g, v);
+    renderRecruit(g, v);
+    renderLog(g);
+    const idle = g.units.filter(u => u.side === 'allied' && !u.acted && !u.broken).length;
+    const e = $('endturn');
+    e.disabled = g.over || v.locked;
+    $('idle').textContent = idle ? idle + ' unit' + (idle === 1 ? '' : 's') + ' still can act' : 'all units have acted';
+    e.classList.toggle('attn', !!adv.pulseEnd);
+    for (const b of document.querySelectorAll('#actions button[data-a="dig"]')) b.classList.toggle('attn', !!adv.pulseDig);
   }
 
-  function renderRecruit(game, view) {
-    const box = $('recruit');
-    box.innerHTML = '<h2>Recruit <span class="pool">(' + game.manpower + ' manpower)</span></h2>';
-    const row = document.createElement('div');
-    row.className = 'recruits';
-    for (const o of view.recruit) {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'act small';
-      b.textContent = o.name + ' (' + o.cost + ')';
-      b.disabled = !o.ok;
-      b.classList.toggle('active', view.recruitType === o.type);
-      b.onclick = () => handlers.onRecruit(o.type);
-      row.appendChild(b);
-    }
-    box.appendChild(row);
-    if (view.mode === 'place') {
-      const p = document.createElement('p'); p.className = 'hint';
-      p.textContent = 'Click an empty square in the Allied rear to place the unit.';
-      box.appendChild(p);
-    }
+  // ---- tooltip / banner ----
+  function showTip(html, x, y) {
+    const t = $('tip'); t.innerHTML = html; t.hidden = false;
+    const st = $('stage').getBoundingClientRect();
+    let left = x - st.left + 16, top = y - st.top + 16;
+    t.style.left = '0px'; t.style.top = '0px';
+    const tw = t.offsetWidth, th = t.offsetHeight;
+    if (left + tw > st.width - 8) left = x - st.left - tw - 16;
+    if (top + th > st.height - 8) top = y - st.top - th - 16;
+    t.style.left = Math.max(4, left) + 'px'; t.style.top = Math.max(4, top) + 'px';
+  }
+  function hideTip() { $('tip').hidden = true; }
+  function banner(text, sub) {
+    const b = $('banner'); b.innerHTML = '<b>' + text + '</b>' + (sub ? '<span>' + sub + '</span>' : '');
+    b.hidden = false; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    clearTimeout(bannerTimer); bannerTimer = setTimeout(() => { b.hidden = true; }, 1500);
   }
 
-  function showOverlay(title, html, buttonText, onClick, cancelText) {
-    $('ov-title').textContent = title;
-    $('ov-body').innerHTML = html;
-    const btn = $('ov-btn');
-    btn.textContent = buttonText;
-    btn.onclick = () => { $('overlay').hidden = true; onClick && onClick(); };
-    const cancel = $('ov-cancel');
-    cancel.hidden = !cancelText;
-    cancel.textContent = cancelText || '';
-    cancel.onclick = () => { $('overlay').hidden = true; };
+  // ---- dialogs ----
+  function card(o) {
+    $('ov-kicker').textContent = o.kicker || ''; $('ov-kicker').hidden = !o.kicker;
+    $('ov-title').textContent = o.title; $('ov-body').innerHTML = o.html || '';
+    $('overlay').className = o.className || '';
+    const b = $('ov-btn'); b.textContent = o.button || 'OK';
+    b.onclick = () => { $('overlay').hidden = true; o.onClick && o.onClick(); };
+    const c = $('ov-cancel'); c.hidden = !o.cancel; c.textContent = o.cancel || '';
+    c.onclick = () => { $('overlay').hidden = true; o.onCancel && o.onCancel(); };
     $('overlay').hidden = false;
-    btn.focus({ preventScroll: true });
-    const card = document.querySelector('#overlay .card'); if (card) card.scrollTop = 0;
+    document.querySelector('#overlay .sheet').scrollTop = 0;
+    b.focus({ preventScroll: true });
   }
 
-  function showEnd(sum, onAgain) {
-    const rows = sum.stats.map(r => '<tr><th>' + r[0] + '</th><td>' + r[1] + '</td></tr>').join('');
-    const html = '<p>' + sum.lead + '</p><table class="stats">' + rows + '</table>' +
-      '<h3>Compare</h3><ul>' + sum.comparisons.map(c => '<li>' + c + '</li>').join('') + '</ul>' +
-      '<h3>Think about it</h3><ol>' + sum.questions.map(q => '<li>' + q + '</li>').join('') + '</ol>';
-    showOverlay(sum.title, html, 'Play Again', onAgain);
+  function endScreen(sum, onAgain) {
+    const stats = sum.stats.map(r => '<div class="big"><b>' + r[1] + '</b><span>' + r[0] + '</span></div>').join('');
+    card({
+      kicker: sum.type === 'armistice' ? 'November 11, 1918' : sum.type === 'breakthrough' ? 'Victory' : 'Defeat',
+      title: sum.title, className: 'ending ' + sum.type,
+      html: '<p class="lead">' + sum.lead + '</p><div class="bigs">' + stats + '</div>' +
+        '<h3>How does that compare?</h3><ul>' + sum.comparisons.map(c => '<li>' + c + '</li>').join('') + '</ul>' +
+        '<h3>Think about it</h3><ol>' + sum.questions.map(q => '<li>' + q + '</li>').join('') + '</ol>',
+      button: 'Play again', onClick: onAgain,
+    });
   }
 
-  return { init, render, showOverlay, showEnd };
+  return { init, render, showTip, hideTip, banner, card, endScreen, glyph, typeGlyph };
 })();
