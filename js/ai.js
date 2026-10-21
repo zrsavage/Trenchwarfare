@@ -1,0 +1,227 @@
+// The computer opponent. Simple, readable rules:
+// mirror digging, extend the line, reserves by rail, defend first.
+globalThis.WF = globalThis.WF || {};
+
+WF.AI = (function () {
+  const C = WF.CONFIG, M = WF.Map, U = WF.Units, K = WF.Combat, A = C.ai;
+  const rnd = () => (WF.rand || Math.random)();
+  const germans = g => g.units.filter(u => u.side === 'german');
+  const allies = g => g.units.filter(u => u.side === 'allied');
+  const FIGHTERS = ['infantry', 'storm', 'tank'];
+  const isReserve = u => u.type === 'infantry' && u.c >= 9;
+  const free = u => !u.acted;
+
+  function note(g, k) { if (WF.Years) WF.Years.note(g, k); }
+
+  // Move a unit to the reachable square closest to (tr, tc). Returns true if it moved.
+  function moveToward(g, u, tr, tc) {
+    const reach = U.reachable(g, u);
+    let bestD = M.distance(u.r, u.c, tr, tc), pick = null;
+    for (const sq of reach.values()) {
+      const d = M.distance(sq.r, sq.c, tr, tc);
+      if (d < bestD || (d === bestD && pick && g.map[sq.r][sq.c].trench > g.map[pick.r][pick.c].trench)) {
+        bestD = d; pick = sq;
+      }
+    }
+    if (!pick) return false;
+    U.moveTo(g, u, pick.r, pick.c);
+    return true;
+  }
+
+  function trenchGoal(g) { return A.trenchGoalByYear[g.year] || 1; }
+
+  function digIn(g, u) {
+    if (!K.canDig(g, u)) return false;
+    return K.dig(g, u);
+  }
+
+  // Each unit with a mission walks (or rides the rail) to its square, then digs in.
+  function runMission(g, u) {
+    const m = u.mission;
+    if (!m || u.acted) return;
+    if (u.r === m.r && u.c === m.c) {
+      if (g.map[u.r][u.c].trench < Math.max(1, m.level || 1) && digIn(g, u)) return;
+      u.mission = null;
+      return;
+    }
+    if (!moveToward(g, u, m.r, m.c)) { u.mission = null; return; }
+    if (u.r === m.r && u.c === m.c && g.map[u.r][u.c].trench < (m.level || 1)) digIn(g, u);
+  }
+
+  function missionSquare(g, row) {
+    for (const c of [8, 7, 9, 6, 10]) if (!U.at(g, row, c)) return { r: row, c };
+    return { r: row, c: 8 };
+  }
+
+  function pickReserve(g, row) {
+    const cands = germans(g).filter(u => u.type === 'infantry' && free(u) && !u.mission);
+    let best = null, bestScore = Infinity;
+    for (const u of cands) {
+      const cell = g.map[u.r][u.c];
+      if (!isReserve(u) && cell.trench > 0) continue;          // leave dug-in front units alone
+      if (U.reachable(g, u).size === 0) continue;
+      const score = (isReserve(u) ? 0 : 40) + Math.abs(u.r - row) * (isReserve(u) ? 0.5 : 1);
+      if (score < bestScore) { bestScore = score; best = u; }
+    }
+    return best;
+  }
+
+  const rowCovered = (g, r) => germans(g).some(u =>
+    (u.type === 'infantry' || u.type === 'machinegun') && Math.abs(u.r - r) <= 1 && u.c >= 4 &&
+    (g.map[u.r][u.c].trench > 0 || (u.mission && Math.abs(u.mission.r - r) <= 1)));
+
+  // Allied units in a row with no German trench facing them: send a reserve and dig.
+  function extendLine(g) {
+    const rows = [...new Set(allies(g).filter(u => u.c >= 4 && u.type !== 'artillery').map(u => u.r))];
+    let sent = 0;
+    for (const r of rows) {
+      if (sent >= A.maxExtendPerTurn) break;
+      if (rowCovered(g, r)) continue;
+      // A German front unit already in the neighbourhood just digs where it stands.
+      const local = germans(g).find(u => free(u) && !u.mission && (u.type === 'infantry' || u.type === 'machinegun') &&
+        Math.abs(u.r - r) <= 1 && u.c >= 4 && u.c <= 9 && g.map[u.r][u.c].trench === 0);
+      if (local) { digIn(g, local); continue; }
+      const res = pickReserve(g, r);
+      if (!res) continue;
+      const sq = missionSquare(g, r);
+      res.mission = { r: sq.r, c: sq.c, level: 1 };
+      runMission(g, res);
+      sent++;
+      if (Math.abs(res.r - r) > 2 || isReserve(res)) note(g, 'extend');
+    }
+  }
+
+  // For every trench the player digs, the facing German square is dug on the next turn.
+  function mirrorDig(g) {
+    for (const r of Object.keys(g.digCredits)) {
+      const row = +r;
+      while (g.digCredits[row] > 0) {
+        const u = germans(g).filter(x => free(x) && !x.mission && (x.type === 'infantry' || x.type === 'machinegun') &&
+          x.r === row && x.c >= 4 && x.c <= 10 && K.canDig(g, x)).sort((a, b) => a.c - b.c)[0];
+        if (!u) {
+          const res = pickReserve(g, row);
+          if (res) { const sq = missionSquare(g, row); res.mission = { r: sq.r, c: sq.c, level: 1 }; runMission(g, res); }
+          g.digCredits[row] = 0;
+          break;
+        }
+        K.dig(g, u);
+        g.digCredits[row]--;
+        note(g, 'mirror');
+      }
+    }
+  }
+
+  // Front units dig in by themselves as the war settles down.
+  function baselineDig(g) {
+    const early = g.year === C.startYear && g.turnCount < A.baselineDigTurn;
+    if (early) return;
+    for (const u of germans(g)) {
+      if (!free(u) || u.mission || u.c < 4 || u.c > 9) continue;
+      if (u.type !== 'infantry' && u.type !== 'machinegun') continue;
+      if (g.map[u.r][u.c].trench < trenchGoal(g)) digIn(g, u);
+    }
+  }
+
+  function captured(g) {
+    return allies(g).filter(u => g.map[u.r][u.c].hub || g.map[u.r][u.c].dugBy === 'german')
+      .sort((a, b) => (g.map[b.r][b.c].hub ? 1 : 0) - (g.map[a.r][a.c].hub ? 1 : 0));
+  }
+
+  // Reserves ride the rail to the gap and counterattack.
+  function counterattack(g, ctx) {
+    for (const target of captured(g)) {
+      if (!g.units.includes(target)) continue;
+      const hub = g.map[target.r][target.c].hub;
+      note(g, 'counter');
+      for (const u of germans(g).filter(x => free(x) && FIGHTERS.includes(x.type) && M.distance(x.r, x.c, target.r, target.c) === 1)) {
+        if (g.units.includes(target)) K.attack(g, u, target);
+      }
+      if (!g.units.includes(target)) continue;
+      const reserves = germans(g).filter(x => x.type === 'infantry' && free(x) && !x.mission && M.distance(x.r, x.c, target.r, target.c) > 1)
+        .sort((a, b) => (isReserve(b) ? 1 : 0) - (isReserve(a) ? 1 : 0) || M.distance(a.r, a.c, target.r, target.c) - M.distance(b.r, b.c, target.r, target.c));
+      for (const u of reserves) {
+        if (ctx.cap <= 0) break;
+        if (!g.units.includes(target)) break;
+        if (!isReserve(u) && M.distance(u.r, u.c, target.r, target.c) > 6) continue;
+        ctx.cap--;
+        moveToward(g, u, target.r, target.c);
+        if (hub && A.hubReserveAttacksSameTurn && M.distance(u.r, u.c, target.r, target.c) === 1) K.attack(g, u, target);
+      }
+    }
+  }
+
+  // Cautious: only attacks an adjacent unit caught in the open if it is a good trade.
+  function opportunistic(g) {
+    for (const u of germans(g).filter(x => free(x) && (x.type === 'infantry' || x.type === 'storm'))) {
+      if (!g.units.includes(u)) continue;
+      const t = K.attackTargets(g, u).find(x => g.map[x.r][x.c].trench === 0);
+      if (!t) continue;
+      const e = K.estimate(g, u, t);
+      if (e.toDef >= e.toAtt * A.attackRatio && e.toDef >= 1) K.attack(g, u, t);
+    }
+  }
+
+  function artillery(g, heavy) {
+    for (const art of germans(g).filter(u => u.type === 'artillery' && free(u))) {
+      if (!heavy && rnd() > A.artilleryChance) continue;
+      const targets = allies(g).filter(t => K.inRange(art, t.r, t.c, C.ranges.artillery));
+      if (!targets.length) continue;
+      targets.sort((a, b) => (g.map[a.r][a.c].trench - g.map[b.r][b.c].trench) || (b.strength - a.strength));
+      K.bombard(g, art, targets[0].r, targets[0].c, heavy ? 'long' : 'short');
+    }
+  }
+
+  // Spring 1918: one big offensive, then the reserves run dry.
+  function offensive(g) {
+    note(g, 'offensive');
+    artillery(g, true);
+    for (const u of germans(g).filter(x => free(x) && (x.type === 'infantry' || x.type === 'storm') && x.c <= 9)) {
+      if (!g.units.includes(u)) continue;
+      u.mission = null;
+      const adj = K.attackTargets(g, u);
+      if (adj.length) { K.attack(g, u, adj.sort((a, b) => a.strength - b.strength)[0]); continue; }
+      const t = allies(g).sort((a, b) => M.distance(u.r, u.c, a.r, a.c) - M.distance(u.r, u.c, b.r, b.c))[0];
+      if (t) moveToward(g, u, t.r, t.c);
+    }
+  }
+
+  function exhaust(g) {
+    g.exhaustion = (g.exhaustion || 0) + 1;
+    for (const u of germans(g).filter(x => x.type === 'infantry' && x.c >= 9 && x.strength > A.exhaustFloor)) K.lose(g, u, 1);
+    K.say(g, 'German reserves are running thin.', 'enemy');
+    note(g, 'exhausted');
+  }
+
+  function takeTurn(g) {
+    for (const u of germans(g)) u.acted = false;
+    const ctx = { cap: Math.max(A.minReserveCap, A.reserveCap - (g.exhaustion || 0)) };
+    const isOffensive = g.year === A.offensiveYear && A.offensiveTurns.includes(g.turn);
+    const afterOffensive = g.year === A.offensiveYear && g.turn > Math.max(...A.offensiveTurns);
+
+    if (isOffensive) offensive(g);
+    else {
+      // A long bombardment tells the Germans where the blow will fall.
+      if (g.warn) {
+        const row = g.warn.r;
+        for (const res of germans(g).filter(u => isReserve(u) && free(u) && !u.mission).sort((a, b) => Math.abs(a.r - row) - Math.abs(b.r - row)).slice(0, 2)) {
+          const sq = missionSquare(g, row);
+          res.mission = { r: sq.r, c: sq.c, level: 2 };
+          runMission(g, res);
+        }
+        K.say(g, 'German reserves move toward ' + M.label(g.warn.r, g.warn.c) + '.', 'enemy');
+        g.warn = null;
+      }
+      for (const u of germans(g)) runMission(g, u);
+      counterattack(g, ctx);
+      mirrorDig(g);
+      extendLine(g);
+      baselineDig(g);
+      opportunistic(g);
+      artillery(g, false);
+    }
+    if (isOffensive && g.turn === Math.max(...A.offensiveTurns)) g.exhaustion = 1;
+    else if (afterOffensive || (g.exhaustion > 0)) exhaust(g);
+  }
+
+  return { takeTurn, moveToward };
+})();

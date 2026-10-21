@@ -107,3 +107,22 @@ h1, h2 { margin: 0; }
   #side { width: 100%; max-width: 560px; flex: none; }
   .coord { display: none; }
 }
+
+/* ---------- Phase 2-6 additions ---------- */
+.cell.target-attack { outline: 4px solid #c00; outline-offset: -4px; background-image: repeating-linear-gradient(45deg, rgba(200,0,0,.25) 0 5px, transparent 5px 10px); }
+.cell.target-range { box-shadow: inset 0 0 0 3px rgba(184,134,11,.9); }
+.cell.target-range:hover { background: #f1d98a; }
+.unit.broken { border-style: dotted; }
+.unit.broken::after { content: "\00d7"; position: absolute; left: -4px; top: -8px; font-weight: 900; font-size: 1.1rem; color: #c00; }
+.coach { background: #fff3c4; border: 2px solid #b8860b; border-radius: 6px; padding: 6px 8px; font-weight: 600; }
+#recruit h2 .pool { font-weight: 400; font-size: .85rem; }
+.recruits { display: flex; flex-wrap: wrap; gap: 6px; }
+.act.small { min-height: 40px; font-size: .8rem; padding: 4px 8px; }
+.hint { font-size: .8rem; margin: 4px 0 0; }
+.card { max-height: 92vh; overflow-y: auto; }
+.card h3 { margin: 12px 0 4px; font-size: 1rem; }
+.card ul, .card ol { margin: 4px 0; padding-left: 20px; line-height: 1.4; }
+.stats { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: .9rem; }
+.stats th { text-align: left; font-weight: 600; padding: 3px 0; border-bottom: 1px solid #ddd; }
+.stats td { text-align: right; padding: 3px 0; border-bottom: 1px solid #ddd; font-variant-numeric: tabular-nums; }
+#actions .act { font-size: .95rem; }

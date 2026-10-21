@@ -52,7 +52,7 @@ WF.UI = (function () {
 
   function unitHtml(u) {
     const def = C.units[u.type];
-    return '<span class="unit ' + u.side + (u.acted ? ' acted' : '') + '" title="' +
+    return '<span class="unit ' + u.side + (u.acted ? ' acted' : '') + (u.broken ? ' broken' : '') + '" title="' +
       SIDE_NAME[u.side] + ' ' + def.name + '">' +
       '<svg class="ico" aria-hidden="true"><use href="#i-' + u.type + '"/></svg>' +
       '<span class="str">' + u.strength + '</span></span>';
@@ -78,6 +78,9 @@ WF.UI = (function () {
         if (sel && sel.r === r && sel.c === c) cls.push('selected');
         const reach = view.reach && view.reach.get(k);
         if (reach) cls.push('reach');
+        const tg = view.targets && view.targets.get(k);
+        if (tg) cls.push('target-' + tg);
+        if (view.place && view.place.has(k)) cls.push('reach');
         if (view.inspect && view.inspect.r === r && view.inspect.c === c) cls.push('inspect');
 
         let h = '';
@@ -100,6 +103,7 @@ WF.UI = (function () {
   function renderInfo(game, view) {
     const box = $('info');
     const u = view.selected;
+    const coach = view.coach ? '<p class="coach">' + view.coach + '</p>' : '';
     if (u) {
       const def = C.units[u.type], cell = game.map[u.r][u.c];
       const status = u.side !== 'allied' ? 'Enemy unit'
@@ -109,14 +113,14 @@ WF.UI = (function () {
         '<dl><dt>Strength</dt><dd>' + u.strength + ' / ' + C.maxStrength + ' (' + U.men(u).toLocaleString() + ' men)</dd>' +
         '<dt>Move</dt><dd>' + def.move + '</dd>' +
         '<dt>Sector</dt><dd>' + M.label(u.r, u.c) + ' &mdash; ' + M.describe(cell) + '</dd>' +
-        '<dt>Status</dt><dd>' + status + '</dd></dl>' +
-        '<p>' + def.role + '</p>';
+        '<dt>Status</dt><dd>' + (u.broken ? 'Broken down' : status) + '</dd></dl>' +
+        '<p>' + def.role + '</p>' + coach;
     } else if (view.inspect) {
       const { r, c } = view.inspect;
-      box.innerHTML = '<h2>Sector ' + M.label(r, c) + '</h2><p>' + cap(M.describe(game.map[r][c])) + '.</p>';
+      box.innerHTML = '<h2>Sector ' + M.label(r, c) + '</h2><p>' + cap(M.describe(game.map[r][c])) + '.</p>' + coach;
     } else {
       box.innerHTML = '<h2>Your move</h2><p>Click one of your blue units to select it, then click a marked square to move there. ' +
-        'Each unit gets one action per turn. Press <b>End Turn</b> when you are done.</p>';
+        'Each unit gets one action per turn. Press <b>End Turn</b> when you are done.</p>' + coach;
     }
   }
 
@@ -148,11 +152,34 @@ WF.UI = (function () {
     renderInfo(game, view);
     renderLog(game);
 
-    const mine = view.selected && view.selected.side === 'allied' && !view.selected.acted;
     for (const b of document.querySelectorAll('#actions .act')) {
       const a = b.dataset.action;
-      if (a === 'move' || a === 'hold') b.disabled = !mine;
-      b.classList.toggle('active', a === 'move' && mine && view.mode === 'move');
+      if (a === 'endturn') { b.disabled = game.over; continue; }
+      b.disabled = !view.actions[a];
+      b.classList.toggle('active', view.mode === a && !b.disabled);
+    }
+    renderRecruit(game, view);
+  }
+
+  function renderRecruit(game, view) {
+    const box = $('recruit');
+    box.innerHTML = '<h2>Recruit <span class="pool">(' + game.manpower + ' manpower)</span></h2>';
+    const row = document.createElement('div');
+    row.className = 'recruits';
+    for (const o of view.recruit) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'act small';
+      b.textContent = o.name + ' (' + o.cost + ')';
+      b.disabled = !o.ok;
+      b.classList.toggle('active', view.recruitType === o.type);
+      b.onclick = () => handlers.onRecruit(o.type);
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+    if (view.mode === 'place') {
+      const p = document.createElement('p'); p.className = 'hint';
+      p.textContent = 'Click an empty square in the Allied rear to place the unit.';
+      box.appendChild(p);
     }
   }
 
@@ -163,8 +190,17 @@ WF.UI = (function () {
     btn.textContent = buttonText;
     btn.onclick = () => { $('overlay').hidden = true; onClick && onClick(); };
     $('overlay').hidden = false;
-    btn.focus();
+    btn.focus({ preventScroll: true });
+    const card = document.querySelector('#overlay .card'); if (card) card.scrollTop = 0;
   }
 
-  return { init, render, showOverlay };
+  function showEnd(sum, onAgain) {
+    const rows = sum.stats.map(r => '<tr><th>' + r[0] + '</th><td>' + r[1] + '</td></tr>').join('');
+    const html = '<p>' + sum.lead + '</p><table class="stats">' + rows + '</table>' +
+      '<h3>Compare</h3><ul>' + sum.comparisons.map(c => '<li>' + c + '</li>').join('') + '</ul>' +
+      '<h3>Think about it</h3><ol>' + sum.questions.map(q => '<li>' + q + '</li>').join('') + '</ol>';
+    showOverlay(sum.title, html, 'Play Again', onAgain);
+  }
+
+  return { init, render, showOverlay, showEnd };
 })();
