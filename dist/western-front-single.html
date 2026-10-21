@@ -1,0 +1,2803 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Western Front</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Oswald:wght@500;700&display=swap">
+<style>
+/* Field-desk look: dark olive panels, brass accents, parchment cards.
+   Layout: header strip on top, battlefield canvas left, sergeant + controls right. */
+:root {
+  --bg: #161a15; --panel: #212820; --panel2: #2b3429; --line: #3a4636; --ink: #f1ecd9; --dim: #a9b39a;
+  --brass: #e0b23c; --brass-d: #8a6a14; --allied: #4b8be0; --alarm: #ff5b4d; --good: #7be07b;
+  --paper: #efe4c6; --paper-ink: #2b2417; --gutter-l: max(14px, env(safe-area-inset-left, 0px)); --gutter-r: max(14px, env(safe-area-inset-right, 0px));
+  --display: Oswald, "Arial Narrow", Impact, sans-serif; --body: "Atkinson Hyperlegible", system-ui, "Segoe UI", sans-serif; --serif: "Libre Baskerville", Georgia, serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.4 var(--body); overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, #board:focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; }
+#app { height: 100%; display: flex; flex-direction: column; }
+
+/* ---------- HUD ---------- */
+#hud { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px 14px; padding: 5px var(--gutter-r) 5px var(--gutter-l); overflow: hidden; background: linear-gradient(#262e24, #1c231b); border-bottom: 2px solid #0e110d; }
+.brand { display: flex; align-items: center; gap: 8px; font: 700 18px var(--display); letter-spacing: .12em; text-transform: uppercase; }
+.brand svg { width: 22px; height: 22px; fill: var(--brass); }
+.goal { display: flex; align-items: baseline; gap: 8px; padding: 2px 12px; white-space: nowrap; border: 2px solid var(--brass-d); border-radius: 999px; background: rgba(224,178,60,.1); font-size: .95rem; }
+.goal .k, .stat .k { font: 500 11px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--brass); }
+.goal b { color: var(--brass); }
+.timeline { list-style: none; display: flex; gap: 4px; margin: 0; padding: 0; }
+.timeline li { padding: 1px 8px 3px; border-radius: 6px; background: #1a201a; border: 1px solid var(--line); font: 500 14px var(--display); letter-spacing: .05em; color: var(--dim); text-align: center; min-width: 48px; }
+.timeline li.done { color: #6d7a65; text-decoration: line-through; }
+.timeline li.now { color: #1a1204; background: var(--brass); border-color: var(--brass); }
+.pips { display: flex; gap: 3px; justify-content: center; margin-top: 2px; }
+.pip, .p { width: 7px; height: 7px; border-radius: 50%; background: rgba(0,0,0,.3); border: 1px solid rgba(0,0,0,.5); display: block; }
+.p.done { background: #1a1204; } .p.now { background: #fff; border-color: #1a1204; }
+.stats { display: flex; gap: 14px; margin-left: auto; align-items: center; }
+.stat { display: flex; flex-direction: column; line-height: 1.1; }
+.stat b { font: 700 17px var(--display); font-variant-numeric: tabular-nums; }
+.meter { display: block; width: 90px; height: 12px; border-radius: 8px; background: #11150f; border: 2px solid #4a5745; overflow: hidden; margin-top: 3px; }
+.meter i { display: block; height: 100%; background: #62d04f; transition: width .4s; }
+.meter i.mid { background: #f2c230; } .meter i.low { background: #f0483c; }
+.tools { display: flex; gap: 6px; }
+.tools button { white-space: nowrap; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); font-size: .85rem; }
+.tools button:hover { background: #38432f; }
+
+/* ---------- Layout ---------- */
+#main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; }
+#stage { position: relative; min-width: 0; min-height: 0; background: radial-gradient(#1b2119, #0d100c); }
+#board-wrap { position: absolute; inset: 0; overflow: auto; display: flex; padding: 2px; }
+#board { display: block; margin: auto; border-radius: 6px; box-shadow: 0 8px 30px rgba(0,0,0,.6); cursor: pointer; flex: none; }
+#panel { overflow-y: auto; padding: 12px var(--gutter-r) 12px 12px; display: flex; flex-direction: column; gap: 10px; background: var(--panel); border-left: 2px solid #0e110d; }
+
+/* ---------- Sergeant ---------- */
+.advisor { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: #f3e9c9; color: var(--paper-ink); border: 3px solid #b99a4a; position: relative; }
+.advisor.warn { background: #ffe0d6; border-color: var(--alarm); }
+.advisor.good { background: #e3f4d2; border-color: #6bb04a; }
+.avatar { width: 52px; height: 52px; flex: none; }
+.who { font: 700 12px var(--display); letter-spacing: .14em; text-transform: uppercase; color: #6b5617; }
+.advisor.warn .who { color: #a52a1d; }
+#advice { margin: 2px 0 0; font-size: 1rem; line-height: 1.35; }
+#advice b { font-weight: 700; }
+
+/* ---------- Unit card, actions ---------- */
+.card-unit { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); }
+.card-unit[hidden] { display: none; }
+.uicon { width: 54px; height: 54px; flex: none; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(#4b8be0, #1f4f98); border: 3px solid #fff; }
+.card-unit.german .uicon { border-radius: 12px; background: linear-gradient(#8b9482, #4e554a); border-color: #1c1f1a; }
+.uicon svg { width: 32px; height: 32px; fill: #fff; }
+.ubody { display: flex; flex-direction: column; min-width: 0; }
+.ubody b { font: 700 17px var(--display); letter-spacing: .03em; }
+.men { color: var(--brass); font-weight: 700; }
+.hurt { color: #8de08d; font-weight: 700; font-size: .85rem; }
+.advisor[hidden] { display: none; }
+.meta, .role { font-size: .82rem; color: var(--dim); }
+#actions { display: flex; flex-direction: column; gap: 6px; }
+#actions[hidden] { display: none; }
+.abtn { display: flex; align-items: center; gap: 10px; text-align: left; padding: 8px 12px; min-height: 54px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel2); }
+.abtn:hover:not(:disabled) { border-color: var(--brass); background: #364130; }
+.abtn:disabled { opacity: .45; cursor: not-allowed; }
+.abtn.on { border-color: var(--brass); background: #4a4220; }
+.abtn svg { width: 28px; height: 28px; flex: none; fill: var(--brass); }
+.abtn span { display: flex; flex-direction: column; line-height: 1.2; }
+.abtn b { font: 700 16px var(--display); letter-spacing: .05em; text-transform: uppercase; }
+.abtn small { color: var(--dim); font-size: .8rem; }
+.attn { animation: attn 1s infinite; }
+@keyframes attn { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,210,74,.8); } 50% { box-shadow: 0 0 0 8px rgba(255,210,74,0); } }
+
+/* ---------- Recruit ---------- */
+#recruit { padding: 8px 10px; border-radius: 10px; background: var(--panel2); border: 1px dashed var(--line); }
+.rec-head { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: 6px; }
+.rec-head b { font: 700 13px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--brass); }
+.rec-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.rbtn { display: flex; align-items: center; gap: 6px; padding: 4px 8px; min-height: 40px; border-radius: 8px; border: 2px solid var(--line); background: #1a201a; font-size: .8rem; }
+.rbtn svg { width: 20px; height: 20px; fill: #bcd1ee; }
+.rbtn em { font-style: normal; font-weight: 700; color: var(--brass); }
+.rbtn:hover:not(:disabled) { border-color: var(--good); }
+.rbtn.on { border-color: var(--good); background: #24402a; }
+.rbtn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---------- End turn ---------- */
+.endturn { display: flex; flex-direction: column; align-items: center; padding: 10px; border-radius: 12px; border: 3px solid #fff3c4; background: linear-gradient(#f0c64a, #c99a24); color: #1d1503; box-shadow: 0 4px 0 #7a5a0c; }
+.endturn span { font: 700 22px var(--display); letter-spacing: .12em; text-transform: uppercase; }
+.endturn small { font-size: .78rem; opacity: .8; }
+.endturn:hover:not(:disabled) { filter: brightness(1.07); }
+.endturn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 0 #7a5a0c; }
+.endturn:disabled { filter: grayscale(.7) brightness(.6); cursor: wait; }
+
+/* ---------- Log ---------- */
+#logbox summary { cursor: pointer; font: 500 13px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); padding: 4px 0; }
+#log { list-style: none; margin: 4px 0 0; padding: 6px 8px; max-height: 240px; overflow-y: auto; background: #151a14; border-radius: 8px; font-size: .84rem; }
+#log li { padding: 3px 0; border-bottom: 1px solid #252e22; }
+#log li.has-why { padding: 0; }
+.why-btn { display: flex; width: 100%; justify-content: space-between; gap: 8px; align-items: flex-start; text-align: left; background: none; border: 0; padding: 3px 0; font-size: inherit; cursor: pointer; }
+.why-btn i { flex: none; font-style: normal; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; background: #3a4a33; color: var(--brass); }
+.why-btn:hover i, .why-btn[aria-expanded="true"] i { background: var(--brass); color: #1a1204; }
+.why { margin: 2px 0 6px; padding: 6px 8px; border-left: 3px solid var(--brass); background: #1d2419; color: #dfe6d0; font-size: .82rem; line-height: 1.4; }
+#log li.enemy { color: #c3cab7; font-style: italic; }
+#log li.note { color: var(--brass); font-family: var(--serif); font-size: .8rem; }
+.link { background: none; border: 0; color: var(--dim); text-decoration: underline; font-size: .8rem; align-self: flex-start; padding: 0; }
+
+/* ---------- Tooltip + banner ---------- */
+#tip { position: absolute; z-index: 5; max-width: 260px; padding: 8px 10px; border-radius: 8px; background: rgba(12,15,11,.95); border: 1px solid var(--brass-d); font-size: .85rem; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.5); }
+#tip[hidden] { display: none; }
+#tip b { color: var(--brass); }
+#tip .dim, .dim { color: var(--dim); }
+#tip .odds { font: 700 15px var(--display); letter-spacing: .06em; text-transform: uppercase; margin: 2px 0; }
+.odds.good, .good { color: var(--good); } .odds.even { color: #f2c230; } .odds.bad, .bad { color: var(--alarm); }
+#banner { position: absolute; left: 0; right: 0; top: 38%; z-index: 6; text-align: center; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
+#banner[hidden] { display: none; }
+#banner b { font: 700 44px var(--display); letter-spacing: .2em; text-transform: uppercase; padding: 8px 40px; background: rgba(10,12,9,.82); border-block: 3px solid var(--brass); color: #fff; width: 100%; }
+#banner span { font-size: .95rem; background: rgba(10,12,9,.82); padding: 2px 16px; color: var(--brass); }
+#banner.show { animation: banner 1.5s ease both; }
+@keyframes banner { 0% { opacity: 0; transform: translateX(-40px); } 15%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateX(40px); } }
+
+/* ---------- Cards ---------- */
+#overlay { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; background: rgba(6,8,5,.78); backdrop-filter: blur(2px); }
+#overlay[hidden] { display: none; }
+.sheet { width: min(620px, 100%); max-height: 94vh; overflow-y: auto; padding: 26px 30px; border-radius: 6px; background: var(--paper); color: var(--paper-ink); border: 4px double #8a7440; box-shadow: 0 20px 60px rgba(0,0,0,.7); }
+.kicker { font: 700 15px var(--display); letter-spacing: .3em; text-transform: uppercase; color: #8d2f22; }
+.sheet h2 { font: 700 34px/1.1 var(--display); text-transform: uppercase; letter-spacing: .04em; margin: 4px 0 12px; }
+.sheet h3 { font: 700 15px var(--display); letter-spacing: .12em; text-transform: uppercase; margin: 16px 0 4px; color: #6b5617; }
+.sheet p, .sheet li { font-family: var(--serif); font-size: .95rem; line-height: 1.55; }
+.sheet .lead { font-size: 1.02rem; }
+.sheet ul, .sheet ol { padding-left: 20px; margin: 4px 0; }
+.news { display: flex; flex-direction: column; margin-top: 12px; padding: 10px 14px; background: rgba(139,106,20,.14); border-left: 5px solid var(--brass-d); font-family: var(--body); }
+.news b { font: 700 13px var(--display); letter-spacing: .14em; text-transform: uppercase; color: #6b5617; }
+.mission { list-style: none; padding: 0 !important; display: grid; gap: 10px; }
+.mission li { padding: 10px 14px; border-left: 5px solid #8d2f22; background: rgba(0,0,0,.05); font-family: var(--body); font-size: 1rem; }
+.mission b { display: block; font: 700 13px var(--display); letter-spacing: .14em; text-transform: uppercase; color: #8d2f22; }
+.star { color: #c98f00; font-size: 1.2em; }
+.steps li { font-family: var(--body); font-size: 1rem; margin: 6px 0; }
+.legend { display: grid; gap: 6px; margin: 10px 0; font-family: var(--body); font-size: .9rem; }
+.lg { display: inline-block; width: 22px; height: 16px; vertical-align: -3px; margin-right: 8px; border-radius: 3px; border: 1px solid #0006; }
+.lg.hatch { background: repeating-linear-gradient(135deg, #e44 0 3px, transparent 3px 6px); } .lg.star { background: #e0b23c; clip-path: polygon(50% 0, 62% 35%, 100% 38%, 70% 60%, 80% 100%, 50% 76%, 20% 100%, 30% 60%, 0 38%, 38% 35%); border: 0; }
+.lg.dash { background: none; border: 0; border-top: 3px dashed #4b8be0; height: 0; } .lg.bar { background: linear-gradient(90deg, #62d04f 70%, #1b1f18 70%); }
+.sheet-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+.btn { padding: 12px 24px; border-radius: 8px; font: 700 17px var(--display); letter-spacing: .1em; text-transform: uppercase; border: 2px solid #2b2417; }
+.btn.primary { background: #2f5d2a; color: #fff; border-color: #1d3a1a; box-shadow: 0 3px 0 #1d3a1a; }
+.btn.primary:hover { background: #3a7233; }
+.btn.ghost { background: transparent; color: var(--paper-ink); }
+.bigs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+.big { padding: 8px 10px; background: rgba(0,0,0,.06); border-radius: 6px; text-align: center; }
+.big b { display: block; font: 700 24px var(--display); font-variant-numeric: tabular-nums; }
+.big span { font-size: .75rem; color: #5b4f33; font-family: var(--body); }
+.ending.breakthrough .kicker { color: #2f6d26; } .ending.collapse .kicker { color: #8d2f22; }
+.yearcard .sheet h2, .briefing .sheet h2 { font-size: 40px; }
+
+/* ---------- Small screens ---------- */
+@media (max-width: 900px) {
+  #hud { flex-wrap: wrap; overflow: visible; }
+  body { overflow: auto; }
+  #app { height: auto; min-height: 100%; }
+  #main { display: flex; flex-direction: column; }
+  #stage { height: 62vh; min-height: 320px; }
+  #panel { border-left: 0; border-top: 2px solid #0e110d; overflow: visible; }
+  .stats { margin-left: 0; }
+  .timeline li { min-width: 44px; padding: 2px 6px; }
+  #banner b { font-size: 28px; }
+  .bigs { grid-template-columns: repeat(2, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .attn, #banner.show { animation: none; } }
+
+/* ---------- Side choice, recap, debrief ---------- */
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.choice { text-align: left; padding: 16px; border-radius: 8px; border: 3px solid #2b2417; background: rgba(0,0,0,.05); color: var(--paper-ink); display: flex; flex-direction: column; gap: 6px; }
+.choice b { font: 700 22px var(--display); letter-spacing: .06em; text-transform: uppercase; }
+.choice span { font-family: var(--body); font-size: .92rem; }
+.choice:hover, .choice:focus-visible { background: #2f5d2a; color: #fff; border-color: #1d3a1a; }
+.causes { display: grid; gap: 6px; margin: 6px 0; font-family: var(--body); font-size: .9rem; }
+.cause { display: grid; grid-template-columns: 140px 1fr 70px; gap: 8px; align-items: center; }
+.cause b { text-align: right; font-variant-numeric: tabular-nums; }
+.cbar { height: 12px; background: rgba(0,0,0,.1); border-radius: 6px; overflow: hidden; } .cbar i { display: block; height: 100%; background: #8d2f22; }
+.moments { list-style: none; padding: 0 !important; display: grid; gap: 4px; }
+.moments li { font-family: var(--body) !important; font-size: .92rem !important; padding: 4px 8px; border-left: 4px solid #8a7440; background: rgba(0,0,0,.04); }
+.moments b { font: 700 12px var(--display); letter-spacing: .08em; text-transform: uppercase; color: #6b5617; margin-right: 6px; }
+.qa { margin: 12px 0; font-family: var(--body); }
+.qa label { display: block; font-weight: 700; font-size: .98rem; margin-bottom: 4px; }
+.qdata { font-size: .85rem; color: #4a3f26; background: rgba(139,106,20,.14); padding: 4px 8px; border-radius: 4px; margin-bottom: 6px; }
+.qa textarea, .who-field input, #copy-box { width: 100%; font: 1rem var(--body); padding: 8px; border: 2px solid #8a7440; border-radius: 6px; background: #fffdf5; color: var(--paper-ink); resize: vertical; }
+.who-field { font-family: var(--body); margin: 8px 0; } .who-field label { display: block; font-size: .85rem; margin-bottom: 2px; }
+.sheet .dim { color: #5b4f33; font-family: var(--body); font-size: .88rem; }
+@media (max-width: 600px) { .choices { grid-template-columns: 1fr; } .cause { grid-template-columns: 100px 1fr 60px; } }
+.advisor, .advisor.good, .advisor.warn, .advisor.info { color: var(--paper-ink); }
+
+/* ---------- Main menu ---------- */
+#menu { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: radial-gradient(ellipse at center, rgba(14,18,12,.78), rgba(6,8,5,.94)); backdrop-filter: blur(5px); overflow-y: auto; }
+#menu[hidden] { display: none; }
+.menu-card { width: min(520px, 100%); padding: 30px 34px 24px; background: var(--paper); color: var(--paper-ink); border: 4px double #8a7440; border-radius: 6px; box-shadow: 0 24px 70px rgba(0,0,0,.75); text-align: center; }
+.menu-kicker { font: 700 15px var(--display); letter-spacing: .5em; text-indent: .5em; color: #8d2f22; }
+#menu h1 { margin: 6px 0 4px; font: 700 54px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 12px; }
+#menu h1 svg { width: 40px; height: 40px; fill: #c98f00; stroke: #5a3d00; stroke-width: 1; flex: none; }
+.menu-tag { font: italic 1rem var(--serif); margin: 4px 0 20px; }
+.menu-buttons { display: grid; gap: 10px; }
+.menu-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 16px; border-radius: 8px; border: 3px solid #2b2417; background: rgba(0,0,0,.05); color: var(--paper-ink); }
+.menu-btn b { font: 700 22px var(--display); letter-spacing: .12em; text-transform: uppercase; }
+.menu-btn span { font-size: .85rem; color: #5b4f33; }
+.menu-btn:hover:not(:disabled), .menu-btn:focus-visible { background: #2f5d2a; border-color: #1d3a1a; color: #fff; }
+.menu-btn:hover:not(:disabled) span, .menu-btn:focus-visible span { color: #d9ecd5; }
+.menu-btn.primary { background: #2f5d2a; border-color: #1d3a1a; color: #fff; box-shadow: 0 3px 0 #1d3a1a; }
+.menu-btn.primary span { color: #d9ecd5; }
+.menu-btn[hidden] { display: none; }
+.menu-opts { margin-top: 16px; text-align: left; font-family: var(--body); font-size: .9rem; }
+.menu-opts summary { cursor: pointer; font: 700 13px var(--display); letter-spacing: .14em; text-transform: uppercase; color: #6b5617; }
+.menu-opts label { display: block; margin-top: 8px; }
+.menu-opts select { width: 100%; margin-top: 4px; padding: 8px; font: 1rem var(--body); border: 2px solid #8a7440; border-radius: 6px; background: #fffdf5; color: var(--paper-ink); }
+.menu-note { color: #5b4f33; margin: 6px 0 0; }
+@media (max-width: 520px) { #menu h1 { font-size: 38px; } .menu-card { padding: 22px 18px; } }
+
+.brand, .brand span, .stat, .stat .k, .goal, .timeline li, .tools button { white-space: nowrap; }
+#menu h1 { font-size: 46px; } #menu h1 svg { width: 32px; height: 32px; }
+
+</style></head><body>
+<div id="app">
+    <header id="hud">
+      <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5 14.9 8.6 22.5 9.2 16.7 14.2 18.5 21.6 12 17.6 5.5 21.6 7.3 14.2 1.5 9.2 9.1 8.6z"/></svg><span>Western Front</span></div>
+      <div class="goal" id="goal" title="Your goal: capture a rail hub behind the enemy lines and hold it for a turn"><span id="goal-text">Capture a rail hub and hold it</span></div>
+      <ol class="timeline" id="timeline" aria-label="Progress through the war"></ol>
+      <div class="stats">
+        <div class="stat" title="Total soldiers lost so far"><span class="k">Lost</span><b id="cas">0</b></div>
+        <div class="stat" title="If the home front loses heart, the war is lost"><span class="k">Morale</span>
+          <span class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="mor-bar"><i id="mor-fill"></i></span></div>
+      </div>
+      <div class="tools">
+        <button id="btn-menu" type="button" title="Back to the main menu">Menu</button>
+        <button id="btn-zoom" type="button" title="Make the map bigger">Zoom: Fit</button>
+        <button id="btn-full" type="button" title="Full screen gives the map the most room">Fullscreen</button>
+        <button id="btn-sound" type="button" title="Sound effects">Sound off</button>
+        <button id="btn-help" type="button" title="How to play">? Help</button>
+      </div>
+    </header>
+
+    <main id="main">
+      <section id="stage">
+        <div id="board-wrap"><canvas id="board" tabindex="0" aria-label="Battlefield map. Use arrow keys to move the cursor and Enter to click."></canvas></div>
+        <div id="tip" role="tooltip" hidden></div>
+        <div id="banner" hidden></div>
+      </section>
+
+      <aside id="panel">
+        <div id="advisor" class="advisor" aria-live="polite">
+          <svg class="avatar" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="27" r="14" fill="#e3b78f"/><path d="M8 25C8 11 17 6 24 6s16 5 16 19z" fill="#5b6b3d"/><rect x="5" y="24" width="38" height="5" rx="2.5" fill="#46542f"/><circle cx="19" cy="31" r="1.8" fill="#222"/><circle cx="29" cy="31" r="1.8" fill="#222"/><path d="M16 37c3-3 13-3 16 0-3 1-5 .5-8 .5s-5 .5-8-.5z" fill="#5a3a22"/></svg>
+          <div><span class="who">Sergeant</span><p id="advice"></p></div>
+        </div>
+        <div id="unitcard" class="card-unit"></div>
+        <div id="actions"></div>
+        <div id="recruit"></div>
+        <button id="endturn" type="button" class="endturn"><span>End Turn</span><small id="idle"></small></button>
+        <details id="logbox" open><summary>Battle log</summary><ol id="log" aria-live="polite"></ol></details>
+        <button id="newgame" type="button" class="link">Main menu</button>
+      </aside>
+    </main>
+  </div>
+
+  <div id="menu" hidden>
+    <div class="menu-card" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+      <div class="menu-kicker">1914 – 1918</div>
+      <h1 id="menu-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5 14.9 8.6 22.5 9.2 16.7 14.2 18.5 21.6 12 17.6 5.5 21.6 7.3 14.2 1.5 9.2 9.1 8.6z"/></svg>Western Front</h1>
+      <p class="menu-tag">Dig in to survive. Then work out how anyone could possibly win.</p>
+      <div class="menu-buttons">
+        <button id="menu-continue" type="button" class="menu-btn primary"><b>Continue</b><span id="menu-continue-sub"></span></button>
+        <button id="menu-new" type="button" class="menu-btn"><b>New game</b><span>Choose the Allies or Germany</span></button>
+        <button id="menu-help" type="button" class="menu-btn"><b>How to play</b><span>A one-minute guide</span></button>
+      </div>
+      <details class="menu-opts"><summary>Teacher options</summary>
+        <label for="menu-length">Game length for new games</label>
+        <select id="menu-length"><option value="6">Full: 6 turns a year (about 20 minutes)</option><option value="4">Short: 4 turns a year (about 13 minutes)</option><option value="3">Quick: 3 turns a year (about 10 minutes)</option></select>
+        <p class="menu-note">Saved games keep the length they started with. Nothing is collected or sent anywhere.</p>
+      </details>
+    </div>
+  </div>
+
+  <div id="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ov-title">
+      <div id="ov-kicker" class="kicker"></div>
+      <h2 id="ov-title"></h2>
+      <div id="ov-body"></div>
+      <div class="sheet-buttons">
+        <button id="ov-cancel" type="button" class="btn ghost" hidden></button>
+        <button id="ov-btn" type="button" class="btn primary"></button>
+      </div>
+    </div>
+  </div>
+
+  
+<script>
+// All tunable numbers live here so the game can be balanced without touching logic.
+globalThis.WF = globalThis.WF || {};
+
+WF.CONFIG = {
+  // ---- Map ----
+  rows: 16,                 // north (Channel) to south (Switzerland)
+  cols: 12,                 // west (Allied rear) to east (German rear)
+  alliedRearCols: [0, 1, 2],
+  germanRearCols: [9, 10, 11],
+  railCol: 10,              // rail line runs the full length of this column
+  hubs: [{ r: 3, c: 10 }, { r: 12, c: 10 }],   // breakthrough objectives
+
+  // Terrain that exists before the first turn (1914 starts empty).
+  // Entries: { r, c, wire: true } | { r, c, crater: true } | { r, c, trench: 1-3 }
+  startingTerrain: [],
+
+  // ---- Time ----
+  startYear: 1914,
+  endYear: 1918,
+  turnsPerYear: 6,
+
+  // ---- Movement ----
+  movement: {
+    craterCost: 2,          // movement points to enter a crater / mud square
+    openCost: 1,
+    trenchCost: 1,
+    overTheTopLimit: 1,     // leaving a trench toward the enemy: stop after this many squares
+    wireEndsMove: true,     // entering wire uses up the unit's whole move
+  },
+
+  // ---- Ranges (Manhattan distance, in sectors) ----
+  ranges: { machineGun: 2, artillery: 4, gas: 3 },
+
+  // ---- Units ----
+  maxStrength: 10,          // 1 point = 1,000 men
+  menPerStrength: 1000,
+  units: {
+    infantry:  { name: 'Infantry',      move: 2, startStrength: 10, year: 1914,
+      role: 'Moves, attacks, digs and captures squares.' },
+    machinegun:{ name: 'Machine Gun',   move: 1, startStrength: 5, year: 1914,
+      role: 'Devastating fire on open squares within 2. Weak in close attack.' },
+    artillery: { name: 'Artillery',     move: 1, startStrength: 5, year: 1914,
+      role: 'Bombards squares within 4. Never captures ground. Creates craters.' },
+    gas:       { name: 'Gas Company',   move: 1, startStrength: 3, year: 1915,
+      role: 'One-time gas attack on a 3-square area.' },
+    tank:      { name: 'Tank',          move: 1, startStrength: 6, year: 1917,
+      role: 'Crosses wire and trenches, protects adjacent infantry. May break down.' },
+    storm:     { name: 'Stormtroopers', move: 3, startStrength: 6, year: 1918,
+      role: 'Infiltration: can move past an enemy square instead of stopping.' },
+  },
+
+  // ---- Starting forces (1914). r = row, c = column, s = strength ----
+  startingForces: {
+    allied: [
+      { t: 'infantry', r: 2,  c: 3, s: 10 }, { t: 'infantry', r: 5,  c: 3, s: 10 },
+      { t: 'infantry', r: 8,  c: 3, s: 10 }, { t: 'infantry', r: 11, c: 3, s: 10 },
+      { t: 'infantry', r: 14, c: 3, s: 10 },
+      { t: 'machinegun', r: 5,  c: 2 },     { t: 'machinegun', r: 11, c: 2 },
+      { t: 'artillery',  r: 7,  c: 1 },     { t: 'artillery',  r: 9,  c: 1 },
+    ],
+    german: [
+      { t: 'infantry', r: 2,  c: 8, s: 10 }, { t: 'infantry', r: 5,  c: 8, s: 10 },
+      { t: 'infantry', r: 8,  c: 8, s: 10 }, { t: 'infantry', r: 11, c: 8, s: 10 },
+      { t: 'infantry', r: 14, c: 8, s: 10 },
+      { t: 'machinegun', r: 4,  c: 8 },     { t: 'machinegun', r: 12, c: 8 },
+      { t: 'artillery',  r: 7,  c: 9 },     { t: 'artillery',  r: 9,  c: 9 },
+      { t: 'infantry', r: 6,  c: 10, s: 10 }, { t: 'infantry', r: 10, c: 10, s: 10 },  // rail reserves
+      { t: 'infantry', r: 4,  c: 10, s: 10 }, { t: 'infantry', r: 11, c: 10, s: 10 },  // hub guards
+    ],
+  },
+
+  // ---- Combat ----
+  combat: {
+    atkMod: { infantry: 1, machinegun: 0.4, artillery: 0, gas: 0, tank: 1.8, storm: 1.3 },
+    defMod: { infantry: 1, machinegun: 0.6, artillery: 0.5, gas: 0.4, tank: 1.2, storm: 1 },
+    trenchReduction: [0, 0.4, 0.6, 0.8],      // damage reduction by trench level
+    trenchDefBonus: [0, 0.3, 0.6, 0.9],       // extra defence power by trench level
+    wireDefBonus: 0.3,
+    adjacentMgBonus: 0.5,                     // defender has a friendly machine gun next to it
+    attackDamage: 0.5,                        // damage to defender per point of attack power
+    counterDamage: 0.6,                       // damage to attacker per point of defence power
+    tankProtection: 0.25,                     // damage cut for infantry next to a working tank
+    tankMgImmunity: 0.8,                      // fraction of machine-gun damage a tank shrugs off
+    antiTankMod: 1.5,                         // German defence vs tanks once they adapt
+    creepingFrom: 1917,
+    capturers: ['infantry', 'storm', 'tank'], // units that advance into a square they clear
+  },
+  machineGun: { damagePerStrength: 1.0 },
+  bombard: {
+    short: { damage: 4, craterChance: 0.25, wireClear: 1 },
+    long:  { damage: 10, adjacentDamage: 4, unlockYear: 1916 },
+  },
+  gas: { firstUse: 9, later: 4, masked: 1, areaRows: 1, unlockYear: 1915 },
+  tank: { breakdown: 0.3, breakdownCountered: 0.4 },
+  rail: { squaresPerTurn: 6 },
+  counters: { gasMasksFrom: 1917, antiTankFrom: 1918 },
+  recruitCost: { infantry: 10, machinegun: 5, artillery: 5, gas: 3, tank: 6, storm: 6 },
+
+  // ---- Computer opponent ----
+  ai: {
+    reserveCap: 2,               // rail reserves sent to a lost trench per turn
+    minReserveCap: 2,            // even an exhausted army can send this many
+    exhaustFloor: 5,             // exhaustion never shrinks a reserve below this strength
+    maxExtendPerTurn: 2,         // flank-matching reserves sent per turn
+    artilleryChance: 0.7,
+    attackRatio: 1.0,            // base: attacks an adjacent unit in the open if damage dealt >= ratio x taken
+    // How hard the computer pushes, 0 to 1, by the army it plays. Higher = accepts worse odds,
+    // shells more often and sends bigger local attacks.
+    aggression: { german: 0.7, allied: 0.35 },
+    pushUnits: 2,                // base attackers in a local push (plus up to 3 more at full aggression)
+    // Local offensives by year and turn, for the army the computer plays.
+    pushes: {
+      german: { 1914: [4, 5], 1915: [3, 5], 1916: [1, 2, 4], 1917: [4], 1918: [] },
+      allied: { 1915: [5], 1916: [4, 5], 1917: [2, 3], 1918: [] },
+    },
+    baselineDigTurn: 3,          // game turn (1914) after which the front digs in on its own
+    trenchGoalByYear: { 1914: 1, 1915: 2, 1916: 3, 1917: 3, 1918: 3 },
+    hubReserveAttacksSameTurn: true,
+    offensiveYear: 1918,
+    offensiveTurns: [2, 3],      // spring offensive (German attack when you play the Allies)
+    offensiveTurnsVsGerman: [4, 5],   // Allied counteroffensive of summer 1918 when you play Germany
+  },
+
+  // ---- Home front ----
+  startMorale: 100,
+  morale: { perStrength: 0.4, failedOffensiveLoss: 4, failedOffensiveExtra: 3, yearHit: { 1917: 5 } },
+  manpowerByYear: { 1914: 10, 1915: 18, 1916: 36, 1917: 18, 1918: 30 },
+  americans: { year: 1918, count: 2, strength: 10 },
+  alliedFront: 3,                // columns <= this start Allied-owned
+
+  saveKey: 'westernfront-save-v3',
+};
+
+// Grid, terrain and trench levels.
+globalThis.WF = globalThis.WF || {};
+
+WF.Map = (function () {
+  const C = WF.CONFIG;
+  const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+  function newCell(r, c) {
+    return {
+      trench: 0,                          // 0-3, permanent once dug
+      wire: false,
+      crater: false,                      // craters / mud, permanent
+      rail: c === C.railCol,
+      hub: C.hubs.some(h => h.r === r && h.c === c),
+    };
+  }
+
+  function create() {
+    const cells = [];
+    for (let r = 0; r < C.rows; r++) {
+      const row = [];
+      for (let c = 0; c < C.cols; c++) row.push(newCell(r, c));
+      cells.push(row);
+    }
+    for (const t of C.startingTerrain) {
+      const cell = cells[t.r][t.c];
+      if (t.wire) cell.wire = true;
+      if (t.crater) cell.crater = true;
+      if (t.trench) cell.trench = t.trench;
+    }
+    return cells;
+  }
+
+  const inBounds = (r, c) => r >= 0 && r < C.rows && c >= 0 && c < C.cols;
+  const label = (r, c) => LETTERS[c] + (r + 1);          // e.g. "F7"
+  const distance = (r1, c1, r2, c2) => Math.abs(r1 - r2) + Math.abs(c1 - c2);
+
+  // Orthogonal neighbours only. The north and south edges are impassable,
+  // which is what ends the Race to the Sea.
+  function neighbors(r, c) {
+    return [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].filter(p => inBounds(p[0], p[1]));
+  }
+
+  function zone(c) {
+    if (C.alliedRearCols.includes(c)) return 'allied-rear';
+    if (C.germanRearCols.includes(c)) return 'german-rear';
+    return 'contested';
+  }
+
+  function describe(cell) {
+    const parts = [];
+    if (cell.trench) parts.push('trench level ' + cell.trench);
+    if (cell.wire) parts.push('barbed wire');
+    if (cell.crater) parts.push('craters and mud');
+    if (cell.hub) parts.push('rail hub (objective)');
+    else if (cell.rail) parts.push('enemy rail line');
+    return parts.length ? parts.join(', ') : 'open ground';
+  }
+
+  return { create, inBounds, label, distance, neighbors, zone, describe };
+})();
+
+// Unit types, creation, and movement rules.
+globalThis.WF = globalThis.WF || {};
+
+// Animation events: the renderer replays these. Harmless when game.events is absent (tests).
+WF.emit = function (g, ev) { if (g && g.events) g.events.push(ev); };
+
+// Who is who. Internally the human is always side 'allied' and the computer 'german'
+// (so the rules only exist once); g.player says which real army the human commands.
+WF.Names = {
+  faction(g, side) { const p = (g && g.player) || 'allied'; return side === 'allied' ? p : (p === 'allied' ? 'german' : 'allied'); },
+  adj(g, side) { return this.faction(g, side) === 'allied' ? 'Allied' : 'German'; },
+  plural(g, side) { return this.faction(g, side) === 'allied' ? 'Allies' : 'Germans'; },
+  me(g) { return this.adj(g, 'allied'); }, foe(g) { return this.adj(g, 'german'); },
+  meP(g) { return this.plural(g, 'allied'); }, foeP(g) { return this.plural(g, 'german'); },
+};
+
+WF.Units = (function () {
+  const C = WF.CONFIG;
+  const M = WF.Map;
+  const EPS = 1e-9;
+
+  function create(game, type, side, r, c, strength) {
+    const def = C.units[type];
+    const s = Math.min(C.maxStrength, strength || def.startStrength);
+    const unit = { id: game.nextId++, type, side, r, c, strength: s, max: s, acted: false, broken: false };
+    game.units.push(unit);
+    return unit;
+  }
+
+  function placeStartingForces(game) {
+    for (const f of C.startingForces.allied) create(game, f.t, 'allied', f.r, f.c, f.s);
+    for (const f of C.startingForces.german) create(game, f.t, 'german', f.r, f.c, f.s);
+  }
+
+  const at = (game, r, c) => game.units.find(u => u.r === r && u.c === c) || null;
+  const byId = (game, id) => game.units.find(u => u.id === id) || null;
+  const isAvailable = (type, year) => C.units[type].year <= year;
+  const enemyOf = side => (side === 'allied' ? 'german' : 'allied');
+  const forwardDir = side => (side === 'allied' ? 1 : -1);   // column direction toward the enemy
+
+  // Squares a unit can reach this turn -> { cost, r, c }. Rules:
+  //  - orthogonal steps; enemy squares block, friendly squares can be passed but not ended on
+  //  - craters cost extra, and a unit that cannot afford one may still enter it as its first step
+  //  - wire ends the move (tanks crush it); leaving a trench toward the enemy allows one square
+  //  - German units move along the rail line at move/rail.squaresPerTurn per square
+  //  - stormtroopers can pass through enemy squares (infiltration) but not stop on them
+  function reachable(game, unit) {
+    const move = C.units[unit.type].move;
+    const dir = forwardDir(unit.side);
+    const isTank = unit.type === 'tank', isStorm = unit.type === 'storm';
+    const railStep = move / C.rail.squaresPerTurn;
+    const best = new Map();
+    const key = (r, c) => r + ',' + c;
+    const start = { cost: 0, stop: false, r: unit.r, c: unit.c };
+    best.set(key(unit.r, unit.c), start);
+    const open = [start];
+
+    while (open.length) {
+      open.sort((a, b) => a.cost - b.cost);
+      const cur = open.shift();
+      if (cur.stop || cur.cost >= move - EPS) continue;
+      const from = game.map[cur.r][cur.c];
+
+      for (const [nr, nc] of M.neighbors(cur.r, cur.c)) {
+        const occ = at(game, nr, nc);
+        if (occ && occ.side !== unit.side && !isStorm) continue;
+        const to = game.map[nr][nc];
+
+        let step = to.crater ? C.movement.craterCost : to.trench ? C.movement.trenchCost : C.movement.openCost;
+        if (unit.side === 'german' && from.rail && to.rail && !to.crater) step = railStep;
+        else if (to.crater && cur.cost > 0 && cur.cost + step > move + EPS) continue;
+        let stop = false;
+        if (to.wire && C.movement.wireEndsMove && !isTank) { step = move - cur.cost; stop = true; }
+        if (!isTank && from.trench > 0 && to.trench === 0 && (nc - cur.c) * dir > 0) stop = true;
+
+        const cost = Math.min(move, cur.cost + step);
+        const k = key(nr, nc);
+        const prev = best.get(k);
+        if (!prev || cost < prev.cost - EPS || (Math.abs(cost - prev.cost) < EPS && prev.stop && !stop)) {
+          const node = { cost, stop, r: nr, c: nc };
+          best.set(k, node);
+          open.push(node);
+        }
+      }
+    }
+
+    const result = new Map();
+    for (const [k, n] of best) {
+      if (n.r === unit.r && n.c === unit.c) continue;
+      if (at(game, n.r, n.c)) continue;           // cannot end on an occupied square
+      result.set(k, { cost: Math.round(n.cost * 100) / 100, r: n.r, c: n.c });
+    }
+    return result;
+  }
+
+  function claim(game, side, r, c) {
+    game.owner[r][c] = side === 'allied' ? 'a' : 'g';
+    if (side === 'allied' && c > (game.farthest || 0)) game.farthest = c;
+  }
+
+  function moveTo(game, unit, r, c) {
+    unit.r = r; unit.c = c;
+    unit.acted = true;
+    if (unit.type === 'tank') game.map[r][c].wire = false;
+    if (unit.type !== 'artillery' && unit.type !== 'gas') claim(game, unit.side, r, c);
+  }
+
+  // Open squares an enemy machine gun can currently fire into (red tint in the UI).
+  // `side` is the side whose units would be hit.
+  function killZone(game, side) {
+    const zone = new Set();
+    const range = C.ranges.machineGun;
+    for (const mg of game.units) {
+      if (mg.type !== 'machinegun' || mg.side === side) continue;
+      for (let r = mg.r - range; r <= mg.r + range; r++) {
+        for (let c = mg.c - range; c <= mg.c + range; c++) {
+          if (!M.inBounds(r, c) || M.distance(mg.r, mg.c, r, c) > range) continue;
+          if (r === mg.r && c === mg.c) continue;
+          if (game.map[r][c].trench === 0) zone.add(r + ',' + c);
+        }
+      }
+    }
+    return zone;
+  }
+
+  const men = u => u.strength * C.menPerStrength;
+
+  return { create, placeStartingForces, at, byId, isAvailable, enemyOf, forwardDir,
+           reachable, moveTo, claim, killZone, men };
+})();
+
+// Year-by-year unlocks, events, historical notes, tutorial hints, and the end-of-game recap.
+globalThis.WF = globalThis.WF || {};
+
+WF.Years = (function () {
+  const C = WF.CONFIG, U = WF.Units, M = WF.Map, N = WF.Names;
+
+  const CARDS = {
+    allied: {
+      1914: { title: '1914: The War of Movement',
+        text: 'August 1914. Armies march into France expecting a short war. You command the Allies (blue); the Germans (gray) face you across open ground. Machine guns and artillery are about to change everything.',
+        news: 'Infantry, machine guns and artillery are available.' },
+      1915: { title: '1915: Gas and Stalemate',
+        text: 'The front has frozen into trenches from the Channel to Switzerland. At Ypres in April the Germans use poison gas for the first time. Both sides search for a way to break the deadlock.',
+        news: 'Gas companies unlock. A first gas attack is devastating.' },
+      1916: { title: '1916: Verdun and the Somme',
+        text: 'Both sides launch enormous offensives. At the Somme the British guns pound the German lines for a week, and the Germans know exactly where the attack is coming.',
+        news: 'Long bombardment unlocks (heavy damage, but it warns the enemy). A bigger manpower pool for one massive offensive.' },
+      1917: { title: '1917: Tanks and Fatigue',
+        text: 'Tanks and creeping barrages appear, but the armies are exhausted. French troops mutiny after the Nivelle Offensive and Russia collapses into revolution. The Germans have gas masks now.',
+        news: 'Tanks (30% chance to break down each turn) and creeping barrage unlock. Home-front morale takes a hit.' },
+      1918: { title: '1918: The Last Year',
+        text: 'Russia is out of the war and Germany gambles on a spring offensive before the Americans arrive in force. If you survive it, new tactics may finally make a breakthrough possible.',
+        news: 'Stormtroopers unlock. American reinforcements arrive. Expect a big German offensive this spring.' },
+    },
+    german: {
+      1914: { title: '1914: The War of Movement',
+        text: 'August 1914. Germany\'s armies sweep into Belgium and France, hoping to win before Russia can mobilize. You command the German army (shown in blue); the Allies (gray) face you across open ground. Machine guns and artillery are about to change everything.',
+        news: 'Infantry, machine guns and artillery are available.' },
+      1915: { title: '1915: Gas and Stalemate',
+        text: 'The front has frozen into trenches from the Channel to Switzerland. At Ypres in April your army uses poison gas for the first time. Both sides search for a way to break the deadlock.',
+        news: 'Gas companies unlock. A first gas attack is devastating.' },
+      1916: { title: '1916: Verdun and the Somme',
+        text: 'Germany attacks at Verdun, hoping to bleed France white, while British and French armies strike at the Somme. Huge battles bring huge losses and tiny gains.',
+        news: 'Long bombardment unlocks (heavy damage, but it warns the enemy). A bigger manpower pool for one massive offensive.' },
+      1917: { title: '1917: Tanks and Fatigue',
+        text: 'The Allies bring tanks, and German submarines draw America into the war. Hunger spreads at home and the army is tired. The Allies have gas masks now.',
+        news: 'Tanks (30% chance to break down each turn) and creeping barrage unlock. Home-front morale takes a hit.' },
+      1918: { title: '1918: The Last Chance',
+        text: 'Russia is out of the war, so divisions are freed from the Eastern Front. This is Germany\'s last chance to win before the Americans arrive in force. Later in the summer, the Allies will counterattack.',
+        news: 'Stormtroopers unlock. Divisions arrive from the Eastern Front. Expect an Allied counteroffensive in late summer.' },
+    },
+  };
+
+  // {E} = enemy adjective, {EP} = enemy plural. Values may be functions of the game.
+  const NOTES = {
+    machineGun: 'Machine guns fired hundreds of rounds a minute. Open ground became a killing zone.',
+    firstDig: 'Trenches saved lives. Within weeks of the first battles, soldiers on both sides were digging in.',
+    mirror: '{EP} dig in opposite every trench you dig. Fortifying gave neither side a lasting edge.',
+    extend: 'The Race to the Sea: each side tried to outflank the other until the trenches reached the Channel.',
+    failedAttack: 'Attackers crossing open ground often lost far more men than the defenders.',
+    firstCapture: 'Breaking in is not breaking through. Reserves arrive by rail faster than infantry can advance through mud.',
+    counter: '{E} reserves rush to the gap by rail. Defenders usually reinforced faster than attackers could advance.',
+    crater: 'Shell craters turned the battlefield into mud. The ground you bombard is the ground you must cross.',
+    longBombard: 'The week-long barrage before the Somme warned the defenders exactly where the attack would fall.',
+    creeping: 'The creeping barrage kept defenders\' heads down while infantry crossed no man\'s land.',
+    gas: 'At Ypres in 1915 the first gas attack stunned the defenders. Soon both sides had gas masks.',
+    gasMask: 'Gas masks cut the effect of later attacks.',
+    tankBreak: 'Early tanks were slow and unreliable. Many broke down before reaching the enemy.',
+    offensive: g => (g.player === 'german'
+      ? 'In August 1918 the Allies counterattacked at Amiens with tanks and infantry. It was called the black day of the German army.'
+      : 'In March 1918 the Germans struck with their last great offensive, using stormtrooper infiltration tactics.'),
+    exhausted: 'The offensive gained ground but cost the attacker reserves it could not replace.',
+    storm: 'Stormtroopers infiltrated past strongpoints instead of attacking them head on. The tactic was a German invention.',
+    hub: 'You have reached a rail hub. If you can hold it, the enemy line may collapse.',
+  };
+
+  // Short lines for the end-of-game "key moments" list.
+  const MOMENTS = {
+    firstDig: 'You dug your first trench.',
+    mirror: 'The enemy dug in opposite your trench.',
+    extend: 'The enemy sent reserves to match your flanking move.',
+    failedAttack: 'Your first costly failed attack.',
+    firstCapture: 'You captured an enemy trench.',
+    counter: 'Enemy reserves counterattacked by rail.',
+    gas: 'You used gas for the first time.',
+    longBombard: 'You fired your first long bombardment.',
+    tankBreak: 'One of your tanks broke down.',
+    offensive: 'The enemy launched its big offensive.',
+    hub: 'You reached an enemy rail hub.',
+  };
+
+  const fill = (g, t) => (typeof t === 'function' ? t(g) : t).replace(/\{EP\}/g, N.foeP(g)).replace(/\{E\}/g, N.foe(g));
+  const when = g => g.year + ', turn ' + g.turn;
+
+  function moment(g, key, text) {
+    g.moments = g.moments || [];
+    if (g.moments.some(m => m.key === key)) return;
+    g.moments.push({ key, label: when(g), text });
+  }
+
+  function note(g, key) {
+    g.notes = g.notes || {};
+    if (g.notes[key] || !NOTES[key]) return;
+    g.notes[key] = true;
+    g.log.push({ text: fill(g, NOTES[key]), kind: 'note' });
+    if (MOMENTS[key]) moment(g, key, MOMENTS[key]);
+  }
+
+  const card = (year, g) => CARDS[(g && g.player) || 'allied'][year];
+
+  // Called when a new year begins (not for the very first one: main shows that card).
+  function startYear(g) {
+    const y = g.year;
+    g.manpower += C.manpowerByYear[y] || 0;
+    const msgs = [];
+    g.counterYear = g.counterYear || {};
+    if (C.morale.yearHit[y]) {
+      g.morale = Math.max(0, g.morale - C.morale.yearHit[y]);
+      msgs.push('Home-front morale falls as the war drags on.');
+    }
+    if (g.techUsed.gas && !g.counters.gasMasks && y >= C.counters.gasMasksFrom) {
+      g.counters.gasMasks = true; g.counterYear.gasMasks = y; msgs.push(N.foeP(g) + ' have issued gas masks.'); note(g, 'gasMask');
+    }
+    if (g.techUsed.tank && !g.counters.antiTank && y >= C.counters.antiTankFrom) {
+      g.counters.antiTank = true; g.counterYear.antiTank = y; msgs.push(N.foeP(g) + ' have anti-tank defenses. Tanks are less effective and break down more.');
+    }
+    if (y === C.americans.year) {
+      let placed = 0;
+      for (let r = 0; r < C.rows && placed < C.americans.count; r += 3) {
+        for (const c of C.alliedRearCols) {
+          if (!U.at(g, r + 1, c) && placed < C.americans.count) {
+            U.create(g, 'infantry', 'allied', r + 1, c, C.americans.strength); placed++; break;
+          }
+        }
+      }
+      msgs.push((g.player === 'german' ? 'Divisions arrive from the Eastern Front: ' : 'American troops arrive: ') + placed + ' fresh infantry units in your rear.');
+    }
+    if (y === 1918) note(g, 'storm');
+    g.log.push({ text: '— ' + y + ' —', kind: 'note' });
+    for (const m of msgs) g.log.push({ text: m, kind: 'note' });
+    return msgs;
+  }
+
+  // ---- Recap ----
+  const CAUSES = { machinegun: 'Machine guns', shelling: 'Artillery shells', assault: 'Infantry assaults', gas: 'Gas', other: 'Other' };
+  const pct = r => Math.round(r * 100) + '%';
+  const pl = (n, w, p) => n + ' ' + (n === 1 ? w : p || w + 's');
+
+  function gainedSquares(g) {
+    let n = 0;
+    for (let r = 0; r < C.rows; r++) for (let c = C.alliedFront + 1; c < C.cols; c++) if (g.owner[r][c] === 'a') n++;
+    return n;
+  }
+
+  function causeList(g) {
+    const lost = (g.stats && g.stats.lost.allied) || {};
+    const total = Object.values(lost).reduce((a, b) => a + b, 0) || 0;
+    return Object.keys(CAUSES).filter(k => lost[k]).map(k => ({ key: k, label: CAUSES[k], men: lost[k] * C.menPerStrength, share: total ? lost[k] / total : 0 }))
+      .sort((a, b) => b.men - a.men);
+  }
+
+  function techLine(g) {
+    const bits = [];
+    if (g.techUsed.gas) bits.push('You used gas first in ' + g.techUsed.gas.y + (g.counterYear && g.counterYear.gasMasks ? '; the enemy had gas masks by ' + g.counterYear.gasMasks + '.' : '; the enemy had not yet adapted.'));
+    if (g.techUsed.tank) bits.push('You used tanks first in ' + g.techUsed.tank.y + (g.counterYear && g.counterYear.antiTank ? '; the enemy had anti-tank defenses by ' + g.counterYear.antiTank + '.' : '.'));
+    if (g.notes && g.notes.longBombard) bits.push('You fired long bombardments, which warned the enemy.');
+    return bits.length ? bits.join(' ') : 'You did not use any of the new weapons (gas, long bombardment, tanks).';
+  }
+
+  function endSummary(g, type) {
+    const st = g.stats || { lost: { allied: {}, german: {} }, attacks: { made: 0, won: 0 }, digs: { allied: 0, german: 0 }, flankMatches: 0, counters: 0, captures: 0, exposedTurns: 0, shells: 0, worst: { men: 0 } };
+    const men = g.casualties * C.menPerStrength, gained = gainedSquares(g), per = gained > 0 && men ? Math.round(men / gained) : null;
+    const causes = causeList(g), me = N.me(g), foe = N.foe(g);
+    const gm = (g.player === 'german');
+    const titles = { breakthrough: 'Breakthrough!', armistice: 'Armistice, November 11, 1918', collapse: 'The Home Front Collapses' };
+    const lead = {
+      breakthrough: gm ? 'You held an Allied rail junction through the counterattack. In reality, Germany\'s 1918 offensives gained ground but never achieved a decisive breakthrough, and the army could not hold what it won.'
+        : 'You held a rail hub through the German counterattack. In reality, no army achieved a lasting breakthrough until the German line was worn down in the Hundred Days of late 1918.',
+      armistice: gm ? 'On November 11, 1918, Germany signed the Armistice. The army was still on French soil, but it was exhausted, the blockade had starved the home front, and revolution was spreading.'
+        : 'The guns fall silent at eleven o\'clock. Neither side broke the other; the war ended mostly through exhaustion. Most commanders ended exactly where you did.',
+      collapse: gm ? 'Morale has broken. In 1918 hunger, the Allied blockade and revolution at home, beginning with the Kiel mutiny, forced the Kaiser to abdicate.'
+        : 'Morale has broken. In 1917 French soldiers mutinied after the Nivelle Offensive and Russia collapsed into revolution as the war\'s cost became unbearable.',
+    };
+    const comparisons = [
+      'On the first day of the Battle of the Somme (July 1, 1916), the British suffered about 57,000 casualties' + (men ? '. ' + (men >= 57000 ? 'Your losses were ' + (men / 57000).toFixed(1) + ' times that.' : 'Your losses were about ' + Math.round(men / 57000 * 100) + '% of that.') : '.'),
+      'The Battle of Verdun (1916) cost roughly 700,000 casualties on both sides for almost no change in the front line.',
+      per ? 'You paid about ' + per.toLocaleString() + ' casualties per square gained.' : gained > 0 ? 'You gained ' + pl(gained, 'square') + ' without casualties, a tiny gain. Surviving in the trenches is not the same as winning.' : 'You gained no ground at all. Surviving in the trenches is not the same as winning.',
+    ];
+
+    // key moments, in order, plus the worst turn
+    const moments = (g.moments || []).slice();
+    if (st.worst && st.worst.men > 0) moments.push({ key: 'worst', label: st.worst.label, text: 'Your worst turn: ' + st.worst.men.toLocaleString() + ' men lost, mostly to ' + (st.worst.cause || 'combat').toLowerCase() + '.' });
+
+    const mgShare = causes.filter(c => c.key === 'machinegun' || c.key === 'shelling').reduce((a, c) => a + c.share, 0);
+    const questions = [
+      { q: 'Defense was stronger than offense. Looking at your attacks, why did the defenders usually have the advantage?',
+        data: 'You made ' + pl(st.attacks.made, 'attack') + ' and ' + st.attacks.won + ' succeeded. ' + (causes.length ? pct(mgShare) + ' of your losses came from machine guns and artillery. ' : '') + 'Your soldiers stood in machine-gun fire ' + st.exposedTurns + ' time' + (st.exposedTurns === 1 ? '' : 's') + '.' },
+      { q: 'Why did digging in keep your soldiers alive but stop you from winning?',
+        data: 'You dug ' + pl(st.digs.allied, 'trench', 'trenches') + ' and the enemy dug ' + st.digs.german + '. You gained ' + pl(gained, 'square') + '.' },
+      { q: 'What happened when you tried to go around the enemy (flanking)?',
+        data: st.flankMatches ? 'The enemy sent reserves to match you ' + pl(st.flankMatches, 'time') + '.' : 'The enemy never needed to match a flanking move. If you did not try one, what do you think would have happened?' },
+      { q: 'When you broke into the enemy line, was that the same as breaking through? What happened next?',
+        data: 'You captured ' + pl(st.captures, 'enemy trench square') + '. The enemy counterattacked ' + pl(st.counters, 'time') + '.' },
+      { q: 'Which new weapon helped you most, and how did the enemy respond?', data: techLine(g) },
+      { q: 'Was the ground you gained worth the cost? What does this tell you about why the war ended the way it did?',
+        data: per ? 'You paid ' + per.toLocaleString() + ' casualties for each square gained.' : 'You gained ' + pl(gained, 'square') + ' and lost ' + men.toLocaleString() + ' men.' },
+    ];
+
+    return {
+      title: titles[type], lead: lead[type], type, me, foe,
+      stats: [
+        ['Soldiers lost', men.toLocaleString()],
+        ['Enemy soldiers lost', (g.gCasualties * C.menPerStrength).toLocaleString()],
+        ['Squares of ground gained', gained],
+        ['Farthest advance', g.farthest >= 4 ? 'Column ' + 'ABCDEFGHIJKL'[g.farthest] : 'Not past your line'],
+        ['Casualties per square', per ? per.toLocaleString() : 'n/a'],
+        ['Final morale', Math.round(g.morale)],
+      ],
+      causes, moments, comparisons, questions,
+      meta: { men, gained, per, endLabel: titles[type], side: me === 'Allied' ? 'the Allies' : 'Germany', year: g.year },
+    };
+  }
+
+  // Plain text a student can paste into a document or an assignment box.
+  function report(sum, answers, name) {
+    const L = [];
+    L.push('WESTERN FRONT: MY RESULTS');
+    if (name) L.push('Name: ' + name);
+    L.push('I played as ' + sum.meta.side + '. Ending: ' + sum.title + '.');
+    L.push('');
+    for (const [k, v] of sum.stats) L.push(k + ': ' + v);
+    if (sum.causes.length) { L.push(''); L.push('Where my losses came from:'); for (const c of sum.causes) L.push('- ' + c.label + ': ' + c.men.toLocaleString() + ' men (' + pct(c.share) + ')'); }
+    if (sum.moments.length) { L.push(''); L.push('Key moments:'); for (const m of sum.moments) L.push('- ' + m.label + ': ' + m.text); }
+    L.push(''); L.push('DEBRIEF QUESTIONS');
+    sum.questions.forEach((q, i) => {
+      L.push(''); L.push((i + 1) + '. ' + q.q); L.push('   My game: ' + q.data); L.push('   My answer: ' + ((answers && answers[i] || '').trim() || '(not answered)'));
+    });
+    return L.join('\n');
+  }
+
+  // Guided first turns (1914) live in coach.js.
+  return { CARDS, NOTES, note, moment, card, startYear, endSummary, report, gainedSquares };
+})();
+
+// Attacks, machine-gun fire, bombardment, gas, digging and damage resolution.
+globalThis.WF = globalThis.WF || {};
+
+WF.Combat = (function () {
+  const C = WF.CONFIG, M = WF.Map, U = WF.Units, K = C.combat;
+  const rnd = () => (WF.rand || Math.random)();
+  const sround = x => { const f = Math.floor(x); return f + (rnd() < x - f ? 1 : 0); };
+  const key = (r, c) => r + ',' + c;
+
+  function say(g, text, kind, why) { g.log.push({ text, kind, why }); }
+  const N = WF.Names;
+  function stat(g) { return g.stats || (g.stats = { lost: { allied: {}, german: {} }, attacks: { made: 0, won: 0 }, digs: { allied: 0, german: 0 }, flankMatches: 0, counters: 0, captures: 0, exposedTurns: 0, shells: 0, mirrors: 0, worst: { men: 0 }, turnCauses: {} }); }
+  const pct = r => Math.round(r * 100) + '%';
+  function note(g, k) { if (WF.Years) WF.Years.note(g, k); }
+  const cellOf = (g, u) => g.map[u.r][u.c];
+  const label = u => M.label(u.r, u.c);
+
+  // Strength lost is casualties (1 point = 1,000 men). Healing never takes them back.
+  function lose(g, u, pts, cause) {
+    pts = Math.max(0, Math.min(pts, u.strength));
+    u.strength -= pts;
+    if (pts > 0) WF.emit(g, { t: 'hit', id: u.id, r: u.r, c: u.c, n: pts, side: u.side });
+    if (u.strength <= 0) WF.emit(g, { t: 'die', id: u.id });
+    const st = stat(g), cz = cause || 'other';
+    st.lost[u.side][cz] = (st.lost[u.side][cz] || 0) + pts;
+    if (u.side === 'allied') { st.turnCauses[cz] = (st.turnCauses[cz] || 0) + pts; }
+    if (u.side === 'allied') {
+      g.casualties += pts;
+      g.morale = Math.max(0, g.morale - pts * C.morale.perStrength);
+    } else g.gCasualties += pts;
+    if (u.strength <= 0) g.units = g.units.filter(x => x !== u);
+    return pts;
+  }
+
+  // Infantry next to a working tank take less damage.
+  function guard(g, u) {
+    if (u.type !== 'infantry' && u.type !== 'storm') return 1;
+    for (const [r, c] of M.neighbors(u.r, u.c)) {
+      const n = U.at(g, r, c);
+      if (n && n.side === u.side && n.type === 'tank' && !n.broken) return 1 - K.tankProtection;
+    }
+    return 1;
+  }
+
+  const trenchRed = (g, u, ignore) => (ignore ? 0 : K.trenchReduction[cellOf(g, u).trench]);
+
+  function hurt(g, u, raw, ignoreTrench, cause) {
+    return lose(g, u, sround(raw * (1 - trenchRed(g, u, ignoreTrench)) * guard(g, u)), cause);
+  }
+
+  function adjacentMg(g, def) {
+    return M.neighbors(def.r, def.c).some(([r, c]) => {
+      const n = U.at(g, r, c);
+      return n && n.side === def.side && n.type === 'machinegun';
+    });
+  }
+
+  // Expected damage both ways, before rounding. Used by the AI and by resolution.
+  function estimate(g, att, def) {
+    const cell = cellOf(g, def);
+    const creeping = g.year >= K.creepingFrom && K.capturers.includes(att.type) &&
+      (g.bombarded || []).includes(key(def.r, def.c));
+    let defPower = def.strength * K.defMod[def.type] * (1 + K.trenchDefBonus[cell.trench]);
+    if (cell.wire) defPower *= 1 + K.wireDefBonus;
+    if (adjacentMg(g, def) && !creeping) defPower *= 1 + K.adjacentMgBonus;
+    if (att.type === 'tank' && g.counters.antiTank) defPower *= K.antiTankMod;
+    const attPower = att.strength * K.atkMod[att.type];
+    return {
+      toDef: attPower * K.attackDamage * (1 - trenchRed(g, def)) * guard(g, def),
+      toAtt: defPower * K.counterDamage * (1 - trenchRed(g, att)) * guard(g, att),
+      creeping,
+    };
+  }
+
+  function attack(g, att, def) {
+    const e = estimate(g, att, def);
+    const where = label(def), ownAttack = att.side === 'allied';
+    WF.emit(g, { t: 'melee', a: att.id, from: { r: att.r, c: att.c }, to: { r: def.r, c: def.c } });
+    const defCell = cellOf(g, def), defTrench = defCell.trench, defWire = defCell.wire, defMg = adjacentMg(g, def), attOpen = cellOf(g, att).trench === 0;
+    const dealt = lose(g, def, sround(e.toDef), 'assault');
+    const taken = lose(g, att, sround(e.toAtt), 'assault');
+    att.acted = true;
+    const defDead = !g.units.includes(def), attAlive = g.units.includes(att);
+
+    let captured = false;
+    if (defDead && attAlive && K.capturers.includes(att.type)) {
+      const hadTrench = g.map[def.r][def.c].trench > 0;
+      U.moveTo(g, att, def.r, def.c);
+      att.acted = true;
+      captured = true;
+      if (ownAttack && hadTrench) note(g, 'firstCapture');
+    }
+    const st = stat(g);
+    const why = attackWhy({ defTrench, defWire, defMg, attOpen, creeping: e.creeping, captured, ownAttack, dealt, taken });
+    if (ownAttack) {
+      st.attacks.made++; if (captured) st.attacks.won++;
+      if (captured) say(g, 'Your attack on ' + where + ' succeeded. You lost ' + fmt(taken) + ', they lost ' + fmt(dealt) + '.', '', why);
+      else {
+        say(g, 'Your attack on ' + where + ' failed. You lost ' + fmt(taken) + ', they lost ' + fmt(dealt) + '.', '', why);
+        if (taken >= C.morale.failedOffensiveLoss) {
+          g.morale = Math.max(0, g.morale - C.morale.failedOffensiveExtra);
+          note(g, 'failedAttack');
+        }
+      }
+      if (e.creeping) note(g, 'creeping');
+      if (captured && defTrench > 0) st.captures++;
+    } else {
+      say(g, N.foe(g) + ' attack on ' + where + (captured ? ' succeeded' : ' was repulsed') + '. You lost ' + fmt(dealt) + ', they lost ' + fmt(taken) + '.', 'enemy', why);
+    }
+    return { dealt, taken, captured };
+  }
+
+  const fmt = pts => (pts * C.menPerStrength).toLocaleString();
+
+  // One plain sentence explaining why a fight went the way it did.
+  function attackWhy(o) {
+    const bits = [];
+    if (o.defTrench) bits.push('the defenders were in a level ' + o.defTrench + ' trench, which absorbed ' + pct([0, .4, .6, .8][o.defTrench]) + ' of the damage');
+    if (o.defWire) bits.push('barbed wire slowed the attackers');
+    if (o.defMg) bits.push('a machine gun next to the defenders fired on the attackers');
+    if (o.creeping) bits.push('a creeping barrage had pinned the defenders down, so their machine guns could not help');
+    if (o.attOpen) bits.push('the attackers were out in the open');
+    const head = o.ownAttack ? (o.captured ? 'You won because ' : 'You lost more men because ') : (o.captured ? 'They won because ' : 'The attack failed because ');
+    if (!bits.length) return head + 'the two sides were evenly matched.';
+    const ending = !o.captured ? ' Defense was stronger than offense.' : ' Even so, winning one square cost many lives.';
+    return head + bits.join(', and ') + '.' + ending;
+  }
+
+  // Machine guns fire automatically at the end of their owner's turn.
+  function mgFire(g, side) {
+    const range = C.ranges.machineGun;
+    let total = 0, mine = 0;
+    for (const mg of g.units.filter(u => u.type === 'machinegun' && u.side === side)) {
+      for (const t of g.units.filter(u => u.side !== side)) {
+        if (cellOf(g, t).trench > 0 || M.distance(mg.r, mg.c, t.r, t.c) > range) continue;
+        WF.emit(g, { t: 'mg', from: { r: mg.r, c: mg.c }, to: { r: t.r, c: t.c } });
+        let raw = mg.strength * C.machineGun.damagePerStrength;
+        if (t.type === 'tank') raw *= 1 - K.tankMgImmunity;
+        total += hurt(g, t, raw, true, 'machinegun');
+        if (side === 'german') note(g, 'machineGun');
+      }
+    }
+    if (total) {
+      if (side === 'german') say(g, 'Enemy machine guns cut down ' + fmt(total) + ' of your men in the open.', 'enemy', 'Machine guns fire automatically at anyone standing in the open within 2 squares. Soldiers who stayed out of the red zone, or were in a trench, were not hit.');
+      else say(g, 'Your machine guns cut down ' + fmt(total) + ' enemy soldiers in the open.', '', 'Machine guns made it nearly impossible to cross open ground. A few guns could stop a whole attack.');
+    }
+    return total;
+  }
+
+  function bombard(g, art, tr, tc, kind) {
+    const B = C.bombard, cells = [[tr, tc]];
+    const long = kind === 'long';
+    if (long) for (const n of M.neighbors(tr, tc)) cells.push(n);
+    let hits = 0, casual = 0;
+    for (const [r, c] of cells) {
+      const cell = g.map[r][c], center = r === tr && c === tc;
+      const raw = long ? (center ? B.long.damage : B.long.adjacentDamage) : B.short.damage;
+      WF.emit(g, { t: 'shell', r, c, big: long && center, from: { r: art.r, c: art.c } });
+      const u = U.at(g, r, c);
+      if (u) { casual += hurt(g, u, raw, false, 'shelling'); hits++; }
+      if (long || center) cell.wire = false;
+      if (long || rnd() < B.short.craterChance) { if (!cell.crater) note(g, 'crater'); cell.crater = true; }
+      g.bombarded = g.bombarded || [];
+      g.bombarded.push(key(r, c));
+    }
+    art.acted = true;
+    stat(g).shells++;
+    if (long && art.side === 'allied') { g.warn = { r: tr, c: tc }; note(g, 'longBombard'); }
+    const w = M.label(tr, tc);
+    if (art.side === 'allied') say(g, (long ? 'Long bombardment of ' : 'Bombardment of ') + w + ': ' + fmt(casual) + ' casualties' + (long ? '. The enemy is warned.' : '.'), '',
+      long ? 'A long bombardment destroys more, but it tells the enemy exactly where the attack will come, so they bring up reserves. This is what happened before the Somme in 1916. The craters also slow your own advance.'
+        : 'Shells destroy wire and hurt soldiers in the open, but soldiers in deep trenches survive, and the craters you make slow your own troops later.');
+    else say(g, 'Enemy guns shell ' + w + '. You lost ' + fmt(casual) + '.', 'enemy', 'Artillery caused most casualties in the war. Soldiers in the open or in shallow trenches were hit hardest.');
+    return casual;
+  }
+
+  function gas(g, unit, tr, tc) {
+    const first = !g.techUsed.gas;
+    const dmg = first ? C.gas.firstUse : (g.counters.gasMasks ? C.gas.masked : C.gas.later);
+    let casual = 0;
+    WF.emit(g, { t: 'gas', r: tr, c: tc, rows: C.gas.areaRows });
+    for (let dr = -C.gas.areaRows; dr <= C.gas.areaRows; dr++) {
+      const r = tr + dr;
+      if (!M.inBounds(r, tc)) continue;
+      const u = U.at(g, r, tc);
+      if (u) casual += hurt(g, u, dmg, true, 'gas');
+    }
+    if (first) g.techUsed.gas = { y: g.year, t: g.turn };
+    g.units = g.units.filter(u => u !== unit);       // one-time attack: the company is spent
+    say(g, 'Gas attack on ' + M.label(tr, tc) + (first ? ' catches the enemy unprepared. ' : '. ') + fmt(casual) + ' enemy casualties' + (!first && g.counters.gasMasks ? ' (gas masks limit the effect)' : '') + '.', '',
+      first ? 'Gas was a new weapon and soldiers had no protection, so the first attack was devastating. Within months both sides had gas masks.' : g.counters.gasMasks ? 'Gas masks made gas far less deadly than it was in 1915.' : 'Surprise was gone, so gas did less than the first time.');
+    note(g, first ? 'gas' : 'gasMask');
+    return casual;
+  }
+
+  const DIGGERS = ['infantry', 'machinegun', 'storm'];
+  const canDig = (g, u) => DIGGERS.includes(u.type) && cellOf(g, u).trench < 3;
+
+  function dig(g, u) {
+    const cell = cellOf(g, u);
+    if (!canDig(g, u)) return false;
+    cell.trench++;
+    WF.emit(g, { t: 'dig', r: u.r, c: u.c });
+    if (!cell.dugBy) cell.dugBy = u.side;
+    stat(g).digs[u.side]++;
+    u.acted = true;
+    if (u.side === 'allied') {
+      if (u.c >= 3 && u.c <= 8) g.digCredits[u.r] = Math.min(3, (g.digCredits[u.r] || 0) + 1);
+      note(g, 'firstDig');
+    }
+    return true;
+  }
+
+  function hold(g, u) {
+    u.acted = true;
+    if (cellOf(g, u).trench > 0 && u.strength < u.max) { u.strength++; WF.emit(g, { t: 'heal', id: u.id, r: u.r, c: u.c }); return true; }
+    return false;
+  }
+
+  function tankBreakdowns(g) {
+    const p = g.counters.antiTank ? C.tank.breakdownCountered : C.tank.breakdown;
+    for (const t of g.units.filter(u => u.type === 'tank' && u.side === 'allied')) {
+      t.broken = rnd() < p;
+      if (t.broken) { t.acted = true; say(g, 'Tank at ' + label(t) + ' has broken down.', '', 'Early tanks were slow, hot and mechanically unreliable. Many broke down before they reached the enemy.'); note(g, 'tankBreak'); }
+    }
+  }
+
+  const inRange = (u, r, c, range) => M.distance(u.r, u.c, r, c) <= range;
+  const attackTargets = (g, u) => M.neighbors(u.r, u.c).map(([r, c]) => U.at(g, r, c))
+    .filter(t => t && t.side !== u.side);
+
+  return { lose, hurt, estimate, attack, mgFire, bombard, gas, dig, hold, canDig, tankBreakdowns,
+           inRange, attackTargets, say, key, stat };
+})();
+
+// The computer opponent. Simple, readable rules:
+// mirror digging, extend the line, reserves by rail, defend first.
+globalThis.WF = globalThis.WF || {};
+
+WF.AI = (function () {
+  const C = WF.CONFIG, M = WF.Map, U = WF.Units, K = WF.Combat, A = C.ai, N = WF.Names;
+  const stat = g => K.stat(g);
+  const aggr = g => A.aggression[N.faction(g, 'german')] || 0;
+  // Turn numbers in the config assume 6 turns a year; shorter games scale them down.
+  const scale = (g, list) => [...new Set((list || []).map(t => Math.max(1, Math.round(t * (g.turnsPerYear || 6) / 6))))];
+  const offTurns = g => scale(g, g.player === 'german' ? A.offensiveTurnsVsGerman : A.offensiveTurns);
+  const rnd = () => (WF.rand || Math.random)();
+  const germans = g => g.units.filter(u => u.side === 'german');
+  const allies = g => g.units.filter(u => u.side === 'allied');
+  const FIGHTERS = ['infantry', 'storm', 'tank'];
+  const isReserve = u => u.type === 'infantry' && u.c >= 9;
+  const free = u => !u.acted;
+
+  function note(g, k) { if (WF.Years) WF.Years.note(g, k); }
+
+  // Move a unit to the reachable square closest to (tr, tc). Returns true if it moved.
+  function moveToward(g, u, tr, tc) {
+    const reach = U.reachable(g, u);
+    let bestD = M.distance(u.r, u.c, tr, tc), pick = null;
+    for (const sq of reach.values()) {
+      const d = M.distance(sq.r, sq.c, tr, tc);
+      if (d < bestD || (d === bestD && pick && g.map[sq.r][sq.c].trench > g.map[pick.r][pick.c].trench)) {
+        bestD = d; pick = sq;
+      }
+    }
+    if (!pick) return false;
+    U.moveTo(g, u, pick.r, pick.c);
+    return true;
+  }
+
+  function trenchGoal(g) { return A.trenchGoalByYear[g.year] || 1; }
+
+  function digIn(g, u) {
+    if (!K.canDig(g, u)) return false;
+    return K.dig(g, u);
+  }
+
+  // Each unit with a mission walks (or rides the rail) to its square, then digs in.
+  function runMission(g, u) {
+    const m = u.mission;
+    if (!m || u.acted) return;
+    if (u.r === m.r && u.c === m.c) {
+      if (g.map[u.r][u.c].trench < Math.max(1, m.level || 1) && digIn(g, u)) return;
+      u.mission = null;
+      return;
+    }
+    if (!moveToward(g, u, m.r, m.c)) { u.mission = null; return; }
+    if (u.r === m.r && u.c === m.c && g.map[u.r][u.c].trench < (m.level || 1)) digIn(g, u);
+  }
+
+  function missionSquare(g, row) {
+    for (const c of [8, 7, 9, 6, 10]) if (!U.at(g, row, c)) return { r: row, c };
+    return { r: row, c: 8 };
+  }
+
+  function pickReserve(g, row) {
+    const cands = germans(g).filter(u => u.type === 'infantry' && free(u) && !u.mission);
+    let best = null, bestScore = Infinity;
+    for (const u of cands) {
+      const cell = g.map[u.r][u.c];
+      if (!isReserve(u) && cell.trench > 0) continue;          // leave dug-in front units alone
+      if (U.reachable(g, u).size === 0) continue;
+      const score = (isReserve(u) ? 0 : 40) + Math.abs(u.r - row) * (isReserve(u) ? 0.5 : 1);
+      if (score < bestScore) { bestScore = score; best = u; }
+    }
+    return best;
+  }
+
+  const rowCovered = (g, r) => germans(g).some(u =>
+    (u.type === 'infantry' || u.type === 'machinegun') && Math.abs(u.r - r) <= 1 && u.c >= 4 &&
+    (g.map[u.r][u.c].trench > 0 || (u.mission && Math.abs(u.mission.r - r) <= 1)));
+
+  // Allied units in a row with no German trench facing them: send a reserve and dig.
+  function extendLine(g) {
+    const rows = [...new Set(allies(g).filter(u => u.c >= 4 && u.type !== 'artillery').map(u => u.r))];
+    let sent = 0;
+    for (const r of rows) {
+      if (sent >= A.maxExtendPerTurn) break;
+      if (rowCovered(g, r)) continue;
+      // A German front unit already in the neighbourhood just digs where it stands.
+      const local = germans(g).find(u => free(u) && !u.mission && (u.type === 'infantry' || u.type === 'machinegun') &&
+        Math.abs(u.r - r) <= 1 && u.c >= 4 && u.c <= 9 && g.map[u.r][u.c].trench === 0);
+      if (local) { digIn(g, local); continue; }
+      const res = pickReserve(g, r);
+      if (!res) continue;
+      const sq = missionSquare(g, r);
+      res.mission = { r: sq.r, c: sq.c, level: 1 };
+      runMission(g, res);
+      sent++; stat(g).flankMatches++;
+      K.say(g, N.foe(g) + ' reserves ride the rail to ' + M.label(sq.r, sq.c) + ' to face your men.', 'enemy', 'When you moved toward an undefended stretch, the enemy rushed reserves there by rail and dug in. Both armies kept trying to go around each other until the trenches reached the Channel and Switzerland. This was the Race to the Sea.');
+      if (Math.abs(res.r - r) > 2 || isReserve(res)) note(g, 'extend');
+    }
+  }
+
+  // For every trench the player digs, the facing German square is dug on the next turn.
+  function mirrorDig(g) {
+    for (const r of Object.keys(g.digCredits)) {
+      const row = +r;
+      while (g.digCredits[row] > 0) {
+        const u = germans(g).filter(x => free(x) && !x.mission && (x.type === 'infantry' || x.type === 'machinegun') &&
+          x.r === row && x.c >= 4 && x.c <= 10 && K.canDig(g, x)).sort((a, b) => a.c - b.c)[0];
+        if (!u) {
+          const res = pickReserve(g, row);
+          if (res) { const sq = missionSquare(g, row); res.mission = { r: sq.r, c: sq.c, level: 1 }; runMission(g, res); }
+          g.digCredits[row] = 0;
+          break;
+        }
+        K.dig(g, u);
+        g.digCredits[row]--;
+        stat(g).mirrors++;
+        K.say(g, N.foe(g) + ' troops dig in at ' + M.label(u.r, u.c) + ', facing your trench.', 'enemy', 'You dug a trench, so they dug one facing it. Once both sides were dug in, neither could gain a lasting edge, and the front froze.');
+        note(g, 'mirror');
+      }
+    }
+  }
+
+  // Front units dig in by themselves as the war settles down.
+  function baselineDig(g) {
+    const early = g.year === C.startYear && g.turnCount < A.baselineDigTurn;
+    if (early) return;
+    for (const u of germans(g)) {
+      if (!free(u) || u.mission || u.c < 4 || u.c > 9) continue;
+      if (u.type !== 'infantry' && u.type !== 'machinegun') continue;
+      if (g.map[u.r][u.c].trench < trenchGoal(g)) digIn(g, u);
+    }
+  }
+
+  function captured(g) {
+    return allies(g).filter(u => g.map[u.r][u.c].hub || g.map[u.r][u.c].dugBy === 'german')
+      .sort((a, b) => (g.map[b.r][b.c].hub ? 1 : 0) - (g.map[a.r][a.c].hub ? 1 : 0));
+  }
+
+  // Reserves ride the rail to the gap and counterattack.
+  function counterattack(g, ctx) {
+    for (const target of captured(g)) {
+      if (!g.units.includes(target)) continue;
+      const hub = g.map[target.r][target.c].hub;
+      note(g, 'counter'); stat(g).counters++;
+      K.say(g, N.foe(g) + ' reserves rush to retake ' + M.label(target.r, target.c) + '.', 'enemy', 'Their reserves travelled by rail in hours, while your soldiers had to cross craters and mud on foot. Breaking into the line was not the same as breaking through it.');
+      for (const u of germans(g).filter(x => free(x) && FIGHTERS.includes(x.type) && M.distance(x.r, x.c, target.r, target.c) === 1)) {
+        if (g.units.includes(target)) K.attack(g, u, target);
+      }
+      if (!g.units.includes(target)) continue;
+      const reserves = germans(g).filter(x => x.type === 'infantry' && free(x) && !x.mission && M.distance(x.r, x.c, target.r, target.c) > 1)
+        .sort((a, b) => (isReserve(b) ? 1 : 0) - (isReserve(a) ? 1 : 0) || M.distance(a.r, a.c, target.r, target.c) - M.distance(b.r, b.c, target.r, target.c));
+      for (const u of reserves) {
+        if (ctx.cap <= 0) break;
+        if (!g.units.includes(target)) break;
+        if (!isReserve(u) && M.distance(u.r, u.c, target.r, target.c) > 6) continue;
+        ctx.cap--;
+        moveToward(g, u, target.r, target.c);
+        if (hub && A.hubReserveAttacksSameTurn && M.distance(u.r, u.c, target.r, target.c) === 1) K.attack(g, u, target);
+      }
+    }
+  }
+
+  // Attacks an adjacent unit if the trade is good enough. A more aggressive army accepts worse odds
+  // and will hit units in a shallow trench too.
+  function opportunistic(g) {
+    const ag = aggr(g), ratio = Math.max(0.5, A.attackRatio - 0.5 * ag);
+    for (const u of germans(g).filter(x => free(x) && (x.type === 'infantry' || x.type === 'storm'))) {
+      if (!g.units.includes(u)) continue;
+      const t = K.attackTargets(g, u).find(x => g.map[x.r][x.c].trench === 0 || (ag >= 0.6 && g.map[x.r][x.c].trench === 1));
+      if (!t) continue;
+      const e = K.estimate(g, u, t);
+      if (e.toDef >= e.toAtt * ratio && e.toDef >= 1) K.attack(g, u, t);
+    }
+  }
+
+  // A local offensive (Ypres, Verdun, the Somme, Arras...): shell one sector, then send
+  // several units at it. Usually costs the attacker more than the defender.
+  function push(g) {
+    const ag = aggr(g);
+    const targets = allies(g).filter(u => u.type !== 'artillery' && u.type !== 'gas')
+      .sort((a, b) => (g.map[a.r][a.c].trench - g.map[b.r][b.c].trench) || (b.c - a.c));
+    const target = targets[0];
+    if (!target) return;
+    const where = M.label(target.r, target.c);
+    K.say(g, N.foe(g) + ' launches an attack near ' + where + '.', 'enemy',
+      'Both armies launched local offensives to gain ground or relieve pressure elsewhere. Attacking across open ground against defenders who had dug in usually cost the attackers more men than the defenders.');
+    for (const art of germans(g).filter(u => u.type === 'artillery' && free(u))) {
+      if (!K.inRange(art, target.r, target.c, C.ranges.artillery)) continue;
+      K.bombard(g, art, target.r, target.c, g.year >= C.bombard.long.unlockYear && ag > 0.5 ? 'long' : 'short');
+    }
+    const n = Math.min(5, Math.round(A.pushUnits + 3 * ag));
+    const pool = germans(g).filter(u => free(u) && FIGHTERS.includes(u.type) && !isReserve(u))
+      .sort((a, b) => M.distance(a.r, a.c, target.r, target.c) - M.distance(b.r, b.c, target.r, target.c)).slice(0, n);
+    for (const u of pool) {
+      if (!g.units.includes(u) || u.acted) continue;
+      u.mission = null;
+      const adj = K.attackTargets(g, u);
+      if (adj.length) { K.attack(g, u, adj.find(x => x === target) || adj.sort((a, b) => a.strength - b.strength)[0]); continue; }
+      moveToward(g, u, target.r, target.c);
+    }
+  }
+
+  function artillery(g, heavy) {
+    for (const art of germans(g).filter(u => u.type === 'artillery' && free(u))) {
+      if (!heavy && rnd() > Math.min(1, A.artilleryChance + 0.3 * aggr(g))) continue;
+      const targets = allies(g).filter(t => K.inRange(art, t.r, t.c, C.ranges.artillery));
+      if (!targets.length) continue;
+      targets.sort((a, b) => (g.map[a.r][a.c].trench - g.map[b.r][b.c].trench) || (b.strength - a.strength));
+      K.bombard(g, art, targets[0].r, targets[0].c, heavy ? 'long' : 'short');
+    }
+  }
+
+  // Spring 1918: one big offensive, then the reserves run dry.
+  function offensive(g) {
+    note(g, 'offensive');
+    if (!g.offensiveSaid) { g.offensiveSaid = true; K.say(g, N.foe(g) + ' launches a major offensive!', 'enemy', g.player === 'german' ? 'In August 1918 the Allies attacked at Amiens with tanks, infantry and aircraft. It was called the black day of the German army.' : 'In March 1918 Germany attacked with stormtroopers before the Americans could arrive in force. It gained ground quickly, then ran out of reserves.'); }
+    artillery(g, true);
+    for (const u of germans(g).filter(x => free(x) && (x.type === 'infantry' || x.type === 'storm') && x.c <= 9)) {
+      if (!g.units.includes(u)) continue;
+      u.mission = null;
+      const adj = K.attackTargets(g, u);
+      if (adj.length) { K.attack(g, u, adj.sort((a, b) => a.strength - b.strength)[0]); continue; }
+      const t = allies(g).sort((a, b) => M.distance(u.r, u.c, a.r, a.c) - M.distance(u.r, u.c, b.r, b.c))[0];
+      if (t) moveToward(g, u, t.r, t.c);
+    }
+  }
+
+  function exhaust(g) {
+    g.exhaustion = (g.exhaustion || 0) + 1;
+    for (const u of germans(g).filter(x => x.type === 'infantry' && x.c >= 9 && x.strength > A.exhaustFloor)) K.lose(g, u, 1);
+    K.say(g, N.foe(g) + ' reserves are running thin.', 'enemy', 'A big offensive uses up men and supplies. After it, the attacker has fewer reserves left, which is why late 1918 finally allowed a breakthrough.');
+    note(g, 'exhausted');
+  }
+
+  function takeTurn(g) {
+    for (const u of germans(g)) u.acted = false;
+    const ctx = { cap: Math.max(A.minReserveCap, A.reserveCap - (g.exhaustion || 0)) };
+    const isOffensive = g.year === A.offensiveYear && offTurns(g).includes(g.turn);
+    const afterOffensive = g.year === A.offensiveYear && g.turn > Math.max(...offTurns(g));
+
+    if (isOffensive) offensive(g);
+    else {
+      // A long bombardment tells the Germans where the blow will fall.
+      if (g.warn) {
+        const row = g.warn.r;
+        for (const res of germans(g).filter(u => isReserve(u) && free(u) && !u.mission).sort((a, b) => Math.abs(a.r - row) - Math.abs(b.r - row)).slice(0, 2)) {
+          const sq = missionSquare(g, row);
+          res.mission = { r: sq.r, c: sq.c, level: 2 };
+          runMission(g, res);
+        }
+        K.say(g, N.foe(g) + ' reserves move toward ' + M.label(g.warn.r, g.warn.c) + '.', 'enemy', 'Your long bombardment warned them where the attack would come, so they sent reserves there. Before the Somme, a week of shelling did the same.');
+        g.warn = null;
+      }
+      const pushTurn = scale(g, (A.pushes[N.faction(g, 'german')] || {})[g.year]).includes(g.turn);
+      if (pushTurn) push(g);
+      for (const u of germans(g)) runMission(g, u);
+      counterattack(g, ctx);
+      mirrorDig(g);
+      extendLine(g);
+      baselineDig(g);
+      opportunistic(g);
+      artillery(g, false);
+    }
+    if (isOffensive && g.turn === Math.max(...offTurns(g))) g.exhaustion = 1;
+    else if (afterOffensive || (g.exhaustion > 0)) exhaust(g);
+  }
+
+  return { takeTurn, moveToward };
+})();
+
+// Tiny synthesized sound effects (no audio files). Off by default; the player turns it on.
+globalThis.WF = globalThis.WF || {};
+
+WF.Audio = (function () {
+  let ctx = null, master = null, muted = true;
+  try { muted = localStorage.getItem('wf-sound') !== 'on'; } catch (e) { /* ignore */ }
+
+  function ensure() {
+    if (!ctx) {
+      try {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+      } catch (e) { ctx = null; }
+    }
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  function noise(dur, f0, f1, vol, type) {
+    const c = ensure(); if (!c || muted) return;
+    const buf = c.createBuffer(1, Math.max(1, Math.floor(c.sampleRate * dur)), c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource(); src.buffer = buf;
+    const f = c.createBiquadFilter(); f.type = type || 'lowpass';
+    f.frequency.setValueAtTime(f0, c.currentTime);
+    f.frequency.exponentialRampToValueAtTime(Math.max(30, f1), c.currentTime + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    src.connect(f); f.connect(g); g.connect(master); src.start();
+  }
+
+  function tone(freq, dur, type, vol, to) {
+    const c = ensure(); if (!c || muted) return;
+    const o = c.createOscillator(); o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, c.currentTime);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, c.currentTime + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    o.connect(g); g.connect(master); o.start(); o.stop(c.currentTime + dur);
+  }
+
+  const SOUNDS = {
+    click: () => tone(520, 0.06, 'square', 0.05),
+    boom: () => { noise(0.9, 900, 60, 0.9); tone(70, 0.5, 'sine', 0.6, 30); },
+    boomSmall: () => { noise(0.5, 1200, 90, 0.6); tone(90, 0.3, 'sine', 0.4, 40); },
+    mg: () => { for (let i = 0; i < 5; i++) setTimeout(() => noise(0.05, 3500, 1500, 0.25, 'bandpass'), i * 55); },
+    clash: () => { noise(0.18, 2500, 400, 0.45, 'bandpass'); tone(160, 0.15, 'triangle', 0.25, 80); },
+    dig: () => { noise(0.25, 700, 200, 0.35); },
+    gas: () => noise(0.9, 4000, 1500, 0.3, 'highpass'),
+    heal: () => tone(660, 0.12, 'sine', 0.08, 880),
+    horn: () => { tone(220, 0.5, 'sawtooth', 0.08); tone(277, 0.5, 'sawtooth', 0.06); },
+  };
+
+  function play(name) { if (!muted && SOUNDS[name]) { try { SOUNDS[name](); } catch (e) { /* ignore */ } } }
+  function setMuted(m) {
+    muted = m;
+    try { localStorage.setItem('wf-sound', m ? 'off' : 'on'); } catch (e) { /* ignore */ }
+    if (!m) { ensure(); play('click'); }
+  }
+  return { play, setMuted, isMuted: () => muted };
+})();
+
+// Canvas renderer: painted battlefield, unit sprites, animations and mouse/keyboard input.
+// The map is drawn rotated so it fits a landscape screen: the Allied rear is at the bottom,
+// the Germans are at the top, the English Channel is on the left, Switzerland on the right.
+globalThis.WF = globalThis.WF || {};
+
+WF.GLYPH = {   // 24x24 icon paths, shared with the DOM panels
+  infantryAllied: 'M4 14C4 7.5 8.5 4 12 4s8 3.5 8 10zM2.5 14.5h19v2.3h-19zM5 22c0-3.6 3-5.4 7-5.4s7 1.8 7 5.4z',
+  infantryGerman: 'M4 14C4 7.5 8.5 5 12 5s8 2.5 8 9zM11.1 1.2h1.8V5h-1.8zM2.5 14.5h19v2.3h-19zM5 22c0-3.6 3-5.4 7-5.4s7 1.8 7 5.4z',
+  machinegun: 'M1.5 8.5h13.5v3.4H1.5zM15 7h5.5v6.5H15zM15.5 13.5l-4.2 7.5h2.3l3.2-5.6 3.5 5.6h2.3l-4.6-7.5zM3 6.2h5v1.6H3z',
+  artillery: 'M2.5 14.5 15 5.2l2.4 3.1L5 17.6zM18.5 17.5a5.2 5.2 0 1 0-10.4 0 5.2 5.2 0 1 0 10.4 0zm-3.2 0a2 2 0 1 1-4 0 2 2 0 1 1 4 0z',
+  gas: 'M6.5 18.5a4.2 4.2 0 0 1-.4-8.4A5.8 5.8 0 0 1 17 8.7a4.9 4.9 0 0 1 .9 9.8zM8 21.5h2v1.3H8zM13.5 21.5h2v1.3h-2z',
+  tank: 'M2.5 14h19v4.6a3 3 0 0 1-3 3h-13a3 3 0 0 1-3-3zM7 8.8h8.3v5H7zM15 9.6h8v2H15z',
+  storm: 'M13.4 1.5 4.5 13.4h5.7L8.6 22.5l10.2-12.4h-5.9z',
+  hub: 'M12 1.5 14.9 8.6 22.5 9.2 16.7 14.2 18.5 21.6 12 17.6 5.5 21.6 7.3 14.2 1.5 9.2 9.1 8.6z',
+};
+
+WF.Render = (function () {
+  const C = WF.CONFIG, M = WF.Map, U = WF.Units;
+  const ROWS = C.rows, COLS = C.cols;
+  const TAU = Math.PI * 2;
+  const paths = {};
+  let canvas, ctx, wrap, dpr = 1, S = 44, seaW = 22, W = 0, H = 0, zoom = 1, flip = false, lastPlayer = null, meName = 'ALLIED', foeName = 'GERMAN';
+  let bg = null, hatch = null, view = null, handlers = {};
+  const sprites = new Map(), fx = [];
+  let flashT0 = -9999;
+  let queue = [], pendingDie = new Set(), idleCbs = [], hover = null, cursor = null, shake = 0, lastTs = 0;
+  const now = () => performance.now();
+
+  // ---- geometry ----
+  const px = r => seaW + (flip ? ROWS - 1 - r : r) * S;
+  const py = c => (COLS - 1 - c) * S;
+  const centre = (r, c) => ({ x: px(r) + S / 2, y: py(c) + S / 2 });
+  function cellAt(x, y) {
+    let r = Math.floor((x - seaW) / S); const c = COLS - 1 - Math.floor(y / S);
+    if (flip) r = ROWS - 1 - r;
+    return M.inBounds(r, c) ? { r, c } : null;
+  }
+  const hash = (r, c, k) => { const v = Math.sin(r * 12.9898 + c * 78.233 + k * 37.719) * 43758.5453; return v - Math.floor(v); };
+  const easeOut = t => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
+  const clamp01 = t => Math.min(1, Math.max(0, t));
+
+  // ---- background (ground, sea, mountains, labels), drawn once per resize ----
+  function vnoise(x, y, seed) {
+    const ix = Math.floor(x), iy = Math.floor(y), fx_ = x - ix, fy = y - iy;
+    const sx = fx_ * fx_ * (3 - 2 * fx_), sy = fy * fy * (3 - 2 * fy);
+    const a = hash(ix, iy, seed), b = hash(ix + 1, iy, seed), c2 = hash(ix, iy + 1, seed), d = hash(ix + 1, iy + 1, seed);
+    return a + (b - a) * sx + (c2 - a) * sy + (a - b - c2 + d) * sx * sy;
+  }
+  const STOPS = [[0, [101, 134, 66]], [3.2, [118, 138, 72]], [4.2, [138, 122, 80]], [6, [128, 102, 68]],
+                 [8.2, [124, 104, 72]], [9.4, [116, 114, 86]], [12, [106, 110, 90]]];
+  function groundColour(cc) {
+    for (let i = 1; i < STOPS.length; i++) {
+      if (cc <= STOPS[i][0]) {
+        const a = STOPS[i - 1], b = STOPS[i], t = (cc - a[0]) / (b[0] - a[0]);
+        return a[1].map((v, k) => v + (b[1][k] - v) * t);
+      }
+    }
+    return STOPS[STOPS.length - 1][1];
+  }
+
+
+  // ---- scenery: trees behind the lines, tracks, ruined farms, dead trunks ----
+  function tree(b, x, y, r) {
+    b.fillStyle = 'rgba(0,0,0,.25)'; b.beginPath(); b.ellipse(x + r * 0.5, y + r * 0.7, r * 1.1, r * 0.55, 0, 0, TAU); b.fill();
+    const cols = ['#2f5a2a', '#3b6b31', '#2a4f26'];
+    for (let i = 0; i < 3; i++) { b.fillStyle = cols[i]; b.beginPath(); b.arc(x + (i - 1) * r * 0.6, y - (i === 1 ? r * 0.35 : 0), r * (0.8 + 0.15 * (i === 1)), 0, TAU); b.fill(); }
+    b.fillStyle = 'rgba(190,230,140,.25)'; b.beginPath(); b.arc(x - r * 0.2, y - r * 0.6, r * 0.4, 0, TAU); b.fill();
+  }
+  function drawProps(b) {
+    // dirt tracks running up to the front
+    b.save(); b.lineCap = 'round';
+    for (const tr of [4.5, 11.5]) {
+      b.strokeStyle = 'rgba(205,180,130,.32)'; b.lineWidth = S * 0.34; b.beginPath();
+      for (let c = -0.5; c <= 4.2; c += 0.25) { const x = seaW + (tr + Math.sin(c * 1.7 + tr) * 0.45) * S, y = (COLS - c) * S; c < -0.4 ? b.moveTo(x, y) : b.lineTo(x, y); }
+      b.stroke();
+      b.strokeStyle = 'rgba(90,70,40,.25)'; b.lineWidth = 2; b.setLineDash([S * 0.2, S * 0.2]); b.stroke(); b.setLineDash([]);
+    }
+    b.restore();
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const x = px(r), y = py(c), h = hash(r, c, 21);
+      if ((c <= 1 || c === 11) && h > 0.6 && !(c === 10)) { const k = hash(r, c, 22); tree(b, x + S * (0.2 + 0.6 * k), y + S * (0.25 + 0.5 * hash(r, c, 23)), S * (0.13 + 0.06 * hash(r, c, 24))); if (h > 0.85) tree(b, x + S * 0.75, y + S * 0.3, S * 0.12); }
+      if (c >= 4 && c <= 8 && h > 0.93) {          // shattered trunk
+        b.strokeStyle = '#2b2118'; b.lineWidth = S * 0.05; b.lineCap = 'round'; b.beginPath(); b.moveTo(x + S * 0.5, y + S * 0.8); b.lineTo(x + S * 0.48, y + S * 0.35); b.lineTo(x + S * 0.6, y + S * 0.2); b.moveTo(x + S * 0.48, y + S * 0.5); b.lineTo(x + S * 0.3, y + S * 0.38); b.stroke();
+      }
+    }
+    // a few ruined farmhouses in the contested ground
+    for (const [r, c] of [[2, 5], [13, 6], [6, 7], [10, 4]]) {
+      const x = px(r) + S * 0.08, y = py(c) + S * 0.12, w = S * 0.5, hh = S * 0.34;
+      b.fillStyle = 'rgba(0,0,0,.25)'; b.fillRect(x + 3, y + 4, w, hh);
+      b.fillStyle = '#9b8c78'; b.fillRect(x, y, w, hh);
+      b.fillStyle = '#6e3b2c'; b.beginPath(); b.moveTo(x - 3, y + 2); b.lineTo(x + w * 0.45, y - S * 0.12); b.lineTo(x + w * 0.62, y + 2); b.lineTo(x + w * 0.5, y + hh * 0.4); b.lineTo(x + 3, y + hh * 0.35); b.closePath(); b.fill();
+      b.fillStyle = '#2a2018'; b.fillRect(x + w * 0.62, y + hh * 0.3, w * 0.3, hh * 0.7);
+    }
+  }
+
+  function buildBackground() {
+    bg = document.createElement('canvas');
+    bg.width = Math.ceil(W * dpr); bg.height = Math.ceil(H * dpr);
+    const b = bg.getContext('2d');
+    // low-resolution noisy ground, scaled up smoothly
+    const lw = Math.ceil(W / 5), lh = Math.ceil(H / 5);
+    const low = document.createElement('canvas'); low.width = lw; low.height = lh;
+    const lc = low.getContext('2d'), img = lc.createImageData(lw, lh);
+    for (let y = 0; y < lh; y++) {
+      for (let x = 0; x < lw; x++) {
+        const X = x * 5 / S, Y = y * 5 / S, cc = COLS - Y;
+        let [r, g, bl] = groundColour(cc);
+        const n1 = vnoise(X * 1.1, Y * 1.1, 3), n2 = vnoise(X * 3.7, Y * 3.7, 9);
+        const v = (n1 - 0.5) * 34 + (n2 - 0.5) * 16;
+        r += v; g += v * 0.95; bl += v * 0.7;
+        if (cc > 3.6 && cc < 9.2 && n1 > 0.58) { const m = (n1 - 0.58) * 2.2; r -= 28 * m; g -= 36 * m; bl -= 22 * m; }
+        if (cc < 3.2 && n2 > 0.62) { g += 10; r -= 8; }
+        const i = (y * lw + x) * 4;
+        img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = bl; img.data[i + 3] = 255;
+      }
+    }
+    lc.putImageData(img, 0, 0);
+    b.imageSmoothingEnabled = true; b.imageSmoothingQuality = 'high';
+    b.drawImage(low, 0, 0, bg.width, bg.height);
+    b.scale(dpr, dpr);
+
+    // grain
+    const gr = document.createElement('canvas'); gr.width = gr.height = 96;
+    const gc = gr.getContext('2d'), gd = gc.createImageData(96, 96);
+    for (let i = 0; i < gd.data.length; i += 4) { const v = Math.random() * 255; gd.data[i] = gd.data[i + 1] = gd.data[i + 2] = v; gd.data[i + 3] = 22; }
+    gc.putImageData(gd, 0, 0);
+    b.fillStyle = b.createPattern(gr, 'repeat'); b.fillRect(0, 0, W, H);
+
+    // zone washes + faint labels
+    b.fillStyle = 'rgba(60,110,200,.07)'; b.fillRect(seaW, py(3), ROWS * S, 4 * S);
+    b.fillStyle = 'rgba(30,30,30,.10)'; b.fillRect(seaW, 0, ROWS * S, 3 * S);
+    b.textAlign = 'center'; b.textBaseline = 'middle';
+    b.font = '700 ' + Math.round(S * 0.8) + 'px Oswald, Impact, sans-serif';
+    b.fillStyle = 'rgba(255,255,255,.13)';
+    b.fillText("N O   M A N ' S   L A N D", W / 2, py(6.5) + S * 0.5);
+    b.font = '700 ' + Math.round(S * 0.42) + 'px Oswald, Impact, sans-serif';
+    const sp = t => t.split('').join(' ');
+    b.fillStyle = 'rgba(120,180,255,.55)'; b.fillText(sp(meName) + '   ' + sp('REAR'), W / 2, py(0) + S * 0.5);
+    b.fillStyle = 'rgba(255,255,255,.35)'; b.fillText(sp(foeName) + '   ' + sp('REAR'), W / 2, py(11) + S * 0.5);
+
+    drawProps(b);
+
+    // sea (left, or right when the map is turned for the German player)
+    const seaX = flip ? W - seaW : 0, mtnX = flip ? 0 : W - seaW;
+    const sg = b.createLinearGradient(seaX, 0, seaX + seaW, 0);
+    if (flip) { sg.addColorStop(0, '#2f7aa8'); sg.addColorStop(1, '#16405f'); } else { sg.addColorStop(0, '#16405f'); sg.addColorStop(1, '#2f7aa8'); }
+    b.fillStyle = sg; b.fillRect(seaX, 0, seaW, H);
+    b.strokeStyle = 'rgba(255,255,255,.35)'; b.lineWidth = 1.5;
+    for (let y = 8; y < H; y += 18) { b.beginPath(); for (let x = 3; x < seaW - 3; x += 8) { b.moveTo(seaX + x, y + ((x / 8) % 2) * 3); b.quadraticCurveTo(seaX + x + 4, y - 3, seaX + x + 8, y + ((x / 8) % 2 ? 0 : 3)); } b.stroke(); }
+    b.fillStyle = '#e8d9a8'; b.fillRect(flip ? seaX : seaW - 3, 0, 3, H);                         // beach
+    b.save(); b.translate(seaX + seaW / 2, H / 2); b.rotate(flip ? Math.PI / 2 : -Math.PI / 2);
+    b.fillStyle = 'rgba(255,255,255,.85)'; b.font = '600 ' + Math.round(seaW * 0.55) + 'px Oswald, sans-serif'; b.fillText('E N G L I S H   C H A N N E L', 0, 0); b.restore();
+
+    // mountains
+    b.fillStyle = '#56634f'; b.fillRect(mtnX, 0, seaW, H);
+    for (let y = 0; y < H; y += S * 1.1) {
+      const h = seaW * (0.45 + 0.3 * hash(1, y, 4)), dir = flip ? -1 : 1, base = flip ? mtnX + seaW : mtnX;
+      b.fillStyle = '#7a8790'; b.beginPath(); b.moveTo(base, y + S * 1.1); b.lineTo(base + dir * h, y + S * 0.55); b.lineTo(base, y); b.closePath(); b.fill();
+      b.fillStyle = '#f2f5f7'; b.beginPath(); b.moveTo(base + dir * h, y + S * 0.55); b.lineTo(base + dir * h * 0.62, y + S * 0.36); b.lineTo(base + dir * h * 0.62, y + S * 0.74); b.closePath(); b.fill();
+    }
+    b.save(); b.translate(mtnX + seaW / 2, H / 2); b.rotate(flip ? -Math.PI / 2 : Math.PI / 2);
+    b.lineWidth = 4; b.strokeStyle = 'rgba(20,30,20,.9)'; b.font = '600 ' + Math.round(seaW * 0.55) + 'px Oswald, sans-serif'; b.strokeText('S W I T Z E R L A N D', 0, 0); b.fillStyle = '#fff'; b.fillText('S W I T Z E R L A N D', 0, 0); b.restore();
+
+    // grid + coordinates
+    b.strokeStyle = 'rgba(0,0,0,.12)'; b.lineWidth = 1;
+    for (let r = 0; r <= ROWS; r++) { b.beginPath(); b.moveTo(px(r), 0); b.lineTo(px(r), H); b.stroke(); }
+    for (let c = 0; c <= COLS; c++) { b.beginPath(); b.moveTo(seaW, c * S); b.lineTo(seaW + ROWS * S, c * S); b.stroke(); }
+    b.font = '600 ' + Math.max(9, Math.round(S * 0.2)) + 'px Atkinson Hyperlegible, sans-serif';
+    b.fillStyle = 'rgba(255,255,255,.55)'; b.textAlign = 'left'; b.textBaseline = 'top';
+    for (let r = 0; r < ROWS; r++) b.fillText(String(r + 1), px(r) + 3, 2);
+    b.textBaseline = 'bottom';
+    for (let c = 0; c < COLS; c++) b.fillText('ABCDEFGHIJKL'[c], px(0) + 3, py(c) + S - 2);
+
+    hatch = document.createElement('canvas'); hatch.width = hatch.height = 16;
+    const hc = hatch.getContext('2d'); hc.strokeStyle = 'rgba(235,45,40,.95)'; hc.lineWidth = 3;
+    hc.beginPath(); hc.moveTo(-2, 18); hc.lineTo(18, -2); hc.moveTo(-10, 10); hc.lineTo(10, -10); hc.moveTo(6, 26); hc.lineTo(26, 6); hc.stroke();
+  }
+
+  // ---- sizing ----
+  function resize() {
+    if (!canvas || !wrap) return;
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cs = getComputedStyle(wrap), aw = Math.max(320, wrap.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)), ah = Math.max(240, wrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom));
+    // width = ROWS*S + 2*seaW with seaW = 0.42 S  ->  16.84 S
+    S = Math.max(22, Math.floor(Math.min(aw / (ROWS + 0.84), ah / COLS) * zoom));
+    seaW = Math.round(S * 0.42);
+    W = ROWS * S + seaW * 2; H = COLS * S;
+    canvas.width = Math.ceil(W * dpr); canvas.height = Math.ceil(H * dpr);
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    buildBackground();
+    for (const sp of sprites.values()) { const c = sp.u ? centre(sp.u.r, sp.u.c) : null; if (c) { sp.x = sp.tx = c.x; sp.y = sp.ty = c.y; } }
+  }
+
+  // ---- sprites ----
+  function glyphPath(key) { return paths[key] || (paths[key] = new Path2D(WF.GLYPH[key])); }
+  const glyphKey = u => (u.type === 'infantry' ? (u.faction === 'german' ? 'infantryGerman' : 'infantryAllied') : u.type);
+
+  function sync(g) {
+    const seen = new Set(), t = now();
+    for (const u of g.units) {
+      seen.add(u.id);
+      const c = centre(u.r, u.c);
+      let sp = sprites.get(u.id);
+      if (!sp) { sp = { id: u.id, x: c.x, y: c.y, appear: t, hold: false, ds: u.strength, gone: false, flash: 0 }; sprites.set(u.id, sp); }
+      sp.u = { inTrench: g.map[u.r][u.c].trench > 0, faction: WF.Names.faction(g, u.side), type: u.type, side: u.side, r: u.r, c: u.c, strength: u.strength, max: u.max, acted: u.acted, broken: u.broken };
+      sp.tx = c.x; sp.ty = c.y; sp.gone = false;
+    }
+    for (const [id, sp] of sprites) if (!seen.has(id) && !sp.gone) { sp.gone = true; sp.goneAt = t; }
+  }
+
+  function update(dt) {
+    const t = now();
+    // fire queued events
+    while (queue.length && queue[0].at <= t) fire(queue.shift());
+    if (!queue.length) for (const sp of sprites.values()) sp.hold = false;
+    if (!isBusy() && idleCbs.length) { const cbs = idleCbs; idleCbs = []; cbs.forEach(f => f()); }
+    for (const [id, sp] of sprites) {
+      const dx = sp.tx - sp.x, dy = sp.ty - sp.y, d = Math.hypot(dx, dy);
+      if (d > 0.5) { const step = Math.min(d, Math.max(S * 3.2 * dt, d * 6 * dt)); sp.x += dx / d * step; sp.y += dy / d * step; } else { sp.x = sp.tx; sp.y = sp.ty; }
+      if (sp.gone && !pendingDie.has(id) && !sp.dying && t - sp.goneAt > 50) { sp.dying = true; sp.dieAt = t; }
+      if (sp.dying && t - sp.dieAt > 650) sprites.delete(id);
+    }
+    for (let i = fx.length - 1; i >= 0; i--) if (t - fx[i].t0 > fx[i].dur) fx.splice(i, 1);
+    shake *= Math.pow(0.002, dt);
+  }
+
+  // ---- event scheduling ----
+  const GAP = { mg: 70, melee: 520, shell: 420, dig: 300, gas: 650, heal: 260, spawn: 250 };
+  const LAG = { mg: 260, melee: 260, shell: 180, gas: 380 };
+  function enqueue(events) {
+    if (!events || !events.length) return;
+    let cur = Math.max(now(), queue.length ? queue[queue.length - 1].at : 0), anchorAt = cur, lag = 0;
+    let total = 0; for (const e of events) total += GAP[e.t] || 0;
+    const scale = total > 5200 ? 5200 / total : 1;
+    for (const e of events) {
+      if (e.t === 'hit' || e.t === 'die') {
+        e.at = anchorAt + lag * scale;
+        if (e.t === 'die') pendingDie.add(e.id);
+        if (e.t === 'hit') { const sp = sprites.get(e.id); if (sp && !sp.hold && sp.u) { sp.hold = true; sp.ds = sp.u.strength; } }
+      } else {
+        e.at = cur; anchorAt = cur; lag = LAG[e.t] || 0;
+        cur += (GAP[e.t] || 0) * scale;
+      }
+      queue.push(e);
+    }
+    queue.sort((a, b) => a.at - b.at);
+  }
+
+  function addFx(o) { o.t0 = now(); fx.push(o); }
+
+  function fire(e) {
+    switch (e.t) {
+      case 'shell': {
+        const c = centre(e.r, e.c);
+        addFx({ k: 'boom', x: c.x, y: c.y, big: e.big, dur: e.big ? 1100 : 800, seed: Math.random() * 99 });
+        shake = Math.max(shake, e.big ? 9 : 5);
+        WF.Audio.play(e.big ? 'boom' : 'boomSmall');
+        break; }
+      case 'mg': {
+        const a = centre(e.from.r, e.from.c), b = centre(e.to.r, e.to.c);
+        addFx({ k: 'tracer', a, b, dur: 420 }); WF.Audio.play('mg'); break; }
+      case 'melee': {
+        const a = sprites.get(e.a), a2 = centre(e.from.r, e.from.c), b = centre(e.to.r, e.to.c);
+        if (a) { const dx = b.x - a2.x, dy = b.y - a2.y, d = Math.hypot(dx, dy) || 1; a.lunge = { x: dx / d * S * 0.4, y: dy / d * S * 0.4, t0: now(), dur: 420 }; }
+        addFx({ k: 'clash', x: b.x, y: b.y, dur: 520, delay: 160 }); WF.Audio.play('clash'); break; }
+      case 'hit': {
+        const sp = sprites.get(e.id);
+        if (sp) { sp.flash = now(); if (sp.hold) sp.ds = Math.max(0, sp.ds - e.n); }
+        const c = sp ? { x: sp.x, y: sp.y } : centre(e.r, e.c);
+        addFx({ k: 'float', x: c.x, y: c.y - S * 0.3, text: '-' + (e.n * 1000).toLocaleString(), col: e.side === 'allied' ? '#ff6b5e' : '#ffd36a', dur: 1500 });
+        break; }
+      case 'die': {
+        pendingDie.delete(e.id); const sp = sprites.get(e.id);
+        if (sp) { sp.dying = true; sp.dieAt = now(); }
+        break; }
+      case 'dig': {
+        const c = centre(e.r, e.c); addFx({ k: 'dirt', x: c.x, y: c.y, dur: 700, seed: Math.random() * 50 }); WF.Audio.play('dig'); break; }
+      case 'gas': {
+        const cells = []; for (let d = -e.rows; d <= e.rows; d++) if (M.inBounds(e.r + d, e.c)) cells.push(centre(e.r + d, e.c));
+        addFx({ k: 'gas', cells, dur: 1700, seed: Math.random() * 50 }); WF.Audio.play('gas'); break; }
+      case 'heal': {
+        const sp = sprites.get(e.id), c = sp ? { x: sp.x, y: sp.y } : centre(e.r, e.c);
+        addFx({ k: 'float', x: c.x, y: c.y - S * 0.3, text: '+1,000', col: '#7be07b', dur: 1300 }); WF.Audio.play('heal'); break; }
+      case 'spawn': { const sp = sprites.get(e.id); if (sp) sp.appear = now(); break; }
+    }
+  }
+
+  // ---- drawing: terrain ----
+  function trenchSide(cell) { return cell.dugBy === 'german' ? 1 : -1; }   // sandbags face the enemy
+
+  function drawTrench(r, c, cell, x, y) {
+    const lvl = cell.trench, cy = y + S / 2, w = S * (0.14 + 0.07 * lvl), d = S * 0.07;
+    const pts = [[x, cy], [x + S * 0.25, cy - d], [x + S * 0.5, cy], [x + S * 0.75, cy + d], [x + S, cy]];
+    const path = () => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); };
+    // vertical links to neighbouring trench squares
+    const link = (dc) => { const n = M.inBounds(r, c + dc) && (WF._game.map[r][c + dc].trench > 0); if (!n) return; ctx.beginPath(); ctx.moveTo(x + S / 2, cy); ctx.lineTo(x + S / 2, cy - dc * S / 2 - 0); ctx.stroke(); };
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(40,28,16,.85)'; ctx.lineWidth = w + 5; path(); ctx.stroke(); link(1); link(-1);
+    ctx.strokeStyle = lvl === 3 ? '#1a1209' : lvl === 2 ? '#2b1f12' : '#3c2c1a'; ctx.lineWidth = w; path(); ctx.stroke(); link(1); link(-1);
+    if (lvl >= 2) { ctx.strokeStyle = 'rgba(190,150,90,.55)'; ctx.lineWidth = Math.max(1.5, w * 0.22); ctx.setLineDash([S * 0.09, S * 0.06]); path(); ctx.stroke(); ctx.setLineDash([]); }
+    // sandbag parapet on the enemy-facing side
+    const side = trenchSide(cell), bags = lvl === 1 ? 0 : 5, by = cy + side * (w / 2 + S * 0.06);
+    ctx.strokeStyle = 'rgba(150,120,80,.95)'; ctx.lineWidth = S * 0.085; ctx.beginPath(); ctx.moveTo(x + S * 0.04, by); ctx.lineTo(x + S * 0.96, by); ctx.stroke();
+    for (let i = 0; i < bags; i++) {
+      ctx.fillStyle = i % 2 ? '#c9b98a' : '#b9a878';
+      ctx.beginPath(); ctx.ellipse(x + S * (0.12 + i * 0.19), by, S * 0.09, S * 0.05, 0, 0, TAU); ctx.fill();
+      if (lvl === 3) { ctx.fillStyle = '#a89868'; ctx.beginPath(); ctx.ellipse(x + S * (0.21 + i * 0.19) - (i === 4 ? S * 0.09 : 0), by + side * S * 0.07, S * 0.08, S * 0.045, 0, 0, TAU); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+
+  function drawWire(x, y) {
+    ctx.save(); ctx.strokeStyle = 'rgba(30,30,30,.9)'; ctx.fillStyle = '#2a2118'; ctx.lineWidth = 1.4;
+    const cy = y + S / 2;
+    for (const px_ of [0.14, 0.86]) ctx.fillRect(x + S * px_ - 1.5, cy - S * 0.2, 3, S * 0.4);
+    for (const off of [-0.08, 0.08]) {
+      ctx.beginPath(); for (let i = 0; i <= 8; i++) { const xx = x + S * (0.14 + i * 0.09), yy = cy + S * off + (i % 2 ? -1 : 1) * S * 0.07; i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke();
+    }
+    ctx.lineWidth = 1.1;
+    for (let i = 0; i < 6; i++) { const xx = x + S * (0.2 + i * 0.12), yy = cy + (i % 2 ? 1 : -1) * S * 0.05; ctx.beginPath(); ctx.moveTo(xx - 2.5, yy - 2.5); ctx.lineTo(xx + 2.5, yy + 2.5); ctx.moveTo(xx + 2.5, yy - 2.5); ctx.lineTo(xx - 2.5, yy + 2.5); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawCraters(r, c, x, y) {
+    const n = hash(r, c, 1) > 0.45 ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      const cx = x + S * (0.28 + 0.44 * hash(r, c, 2 + i)), cy = y + S * (0.3 + 0.4 * hash(r, c, 5 + i)), rx = S * (0.17 + 0.12 * hash(r, c, 8 + i)), ry = rx * 0.78;
+      const g = ctx.createRadialGradient(cx, cy, 1, cx, cy, rx);
+      g.addColorStop(0, '#201810'); g.addColorStop(0.6, '#4a3925'); g.addColorStop(1, '#6a5238');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(235,210,160,.35)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(cx, cy - 0.5, rx, ry, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+      ctx.fillStyle = 'rgba(120,150,170,.35)'; ctx.beginPath(); ctx.ellipse(cx + rx * 0.15, cy + ry * 0.2, rx * 0.4, ry * 0.3, 0, 0, TAU); ctx.fill();
+    }
+  }
+
+  function drawRail(x, y) {
+    const cy = y + S / 2;
+    ctx.fillStyle = 'rgba(70,66,60,.55)'; ctx.fillRect(x, cy - S * 0.2, S, S * 0.4);
+    ctx.fillStyle = '#4b3a26';
+    for (let i = 0; i < 4; i++) ctx.fillRect(x + S * (0.08 + i * 0.25), cy - S * 0.17, S * 0.07, S * 0.34);
+    ctx.fillStyle = '#c8cdd0'; ctx.fillRect(x, cy - S * 0.1, S, 2); ctx.fillRect(x, cy + S * 0.08, S, 2);
+  }
+
+  function drawHub(x, y, t) {
+    const cx = x + S / 2, cy = y + S / 2, pulse = 0.5 + 0.5 * Math.sin(t * 3);
+    const g = ctx.createRadialGradient(cx, cy, S * 0.1, cx, cy, S * (0.7 + pulse * 0.15));
+    g.addColorStop(0, 'rgba(255,215,90,.55)'); g.addColorStop(1, 'rgba(255,215,90,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - S * 0.3, y - S * 0.3, S * 1.6, S * 1.6);
+    ctx.fillStyle = '#7a3b2b'; ctx.fillRect(x + S * 0.12, y + S * 0.12, S * 0.44, S * 0.3);          // station
+    ctx.fillStyle = '#b4503a'; ctx.beginPath(); ctx.moveTo(x + S * 0.08, y + S * 0.14); ctx.lineTo(x + S * 0.34, y + S * 0.02); ctx.lineTo(x + S * 0.6, y + S * 0.14); ctx.fill();
+    ctx.save(); ctx.translate(x + S * 0.52, y + S * 0.5); ctx.scale(S * 0.5 / 24, S * 0.5 / 24); ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#5a3d00'; ctx.lineWidth = 1.6; ctx.fill(glyphPath('hub')); ctx.stroke(glyphPath('hub')); ctx.restore();
+  }
+
+  function drawTerrain(g, t) {
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const cell = g.map[r][c], x = px(r), y = py(c);
+      if (cell.rail) drawRail(x, y);
+      if (cell.crater) drawCraters(r, c, x, y);
+      if (cell.trench) drawTrench(r, c, cell, x, y);
+      if (cell.wire) drawWire(x, y);
+      if (cell.hub) drawHub(x, y, t);
+    }
+  }
+
+  function drawOwnership(g) {
+    ctx.save();
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const o = g.owner[r][c]; if (!o) continue;
+      ctx.fillStyle = o === 'a' ? 'rgba(70,130,235,.09)' : 'rgba(25,25,25,.11)';
+      ctx.fillRect(px(r), py(c), S, S);
+    }
+    ctx.lineWidth = 3; ctx.setLineDash([S * 0.16, S * 0.08]);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const o = g.owner[r][c]; if (!o) continue;
+      ctx.strokeStyle = o === 'a' ? 'rgba(90,160,255,.95)' : 'rgba(35,35,35,.8)';
+      const x = px(r), y = py(c), own = o;
+      const edge = (nr, nc, x1, y1, x2, y2) => { if (!M.inBounds(nr, nc) || g.owner[nr][nc] === own) return; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
+      for (const nr of [r + 1, r - 1]) { if (!M.inBounds(nr, c)) continue; const bx = (px(r) + px(nr)) / 2 + S / 2; edge(nr, c, bx, y, bx, y + S); }
+      edge(r, c + 1, x, y, x + S, y); edge(r, c - 1, x, y + S, x + S, y + S);
+    }
+    ctx.restore();
+  }
+
+  // ---- drawing: overlays ----
+  function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  const keyOf = (r, c) => r + ',' + c;
+
+  function drawOverlays(v, t) {
+    const pulse = 0.5 + 0.5 * Math.sin(t * 4);
+    if (v.kill && v.kill.size) {
+      ctx.save(); ctx.fillStyle = ctx.createPattern(hatch, 'repeat'); ctx.globalAlpha = v.selected ? 0.6 : 0.4;
+      for (const k of v.kill) { const [r, c] = k.split(',').map(Number); ctx.fillRect(px(r), py(c), S, S); }
+      ctx.globalAlpha = v.selected ? 0.12 : 0.06; ctx.fillStyle = '#d02020';
+      for (const k of v.kill) { const [r, c] = k.split(',').map(Number); ctx.fillRect(px(r), py(c), S, S); }
+      ctx.restore();
+    }
+    if (v.range) for (const k of v.range.keys()) {
+      const [r, c] = k.split(',').map(Number);
+      ctx.fillStyle = 'rgba(255,190,60,' + (0.16 + 0.06 * pulse) + ')'; roundRect(px(r) + 2, py(c) + 2, S - 4, S - 4, 6); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,200,80,.8)'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    if (v.reach) for (const [k, info] of v.reach) {
+      const [r, c] = k.split(',').map(Number), x = px(r), y = py(c);
+      ctx.fillStyle = 'rgba(90,170,255,' + (0.22 + 0.1 * pulse) + ')'; roundRect(x + 3, y + 3, S - 6, S - 6, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(170,215,255,.95)'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.arc(x + S / 2, y + S / 2, S * 0.07, 0, TAU); ctx.fill();
+      if (v.kill && v.kill.has(k)) { ctx.fillStyle = '#ff4a3c'; ctx.beginPath(); ctx.moveTo(x + S - 6, y + 5); ctx.lineTo(x + S - 14, y + 20); ctx.lineTo(x + S - 1, y + 20); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '700 ' + Math.round(S * 0.2) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', x + S - 7.5, y + 16); }
+    }
+    if (v.place) for (const k of v.place) {
+      const [r, c] = k.split(',').map(Number);
+      ctx.fillStyle = 'rgba(110,235,130,' + (0.2 + 0.12 * pulse) + ')'; roundRect(px(r) + 3, py(c) + 3, S - 6, S - 6, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(160,255,175,.95)'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
+    }
+    if (v.targets) for (const k of v.targets.keys()) {
+      const [r, c] = k.split(',').map(Number), cc = centre(r, c), rad = S * (0.46 + 0.04 * pulse);
+      ctx.strokeStyle = '#ff3b30'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cc.x, cc.y, rad, 0, TAU); ctx.stroke();
+      ctx.lineWidth = 2.5; for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; ctx.beginPath(); ctx.moveTo(cc.x + Math.cos(a) * (rad - 4), cc.y + Math.sin(a) * (rad - 4)); ctx.lineTo(cc.x + Math.cos(a) * (rad + 6), cc.y + Math.sin(a) * (rad + 6)); ctx.stroke(); }
+    }
+    // hover preview
+    if (hover && v.game) {
+      const k = keyOf(hover.r, hover.c), x = px(hover.r), y = py(hover.c);
+      ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = 2.5; roundRect(x + 1.5, y + 1.5, S - 3, S - 3, 6); ctx.stroke();
+      if (v.range && v.range.has(k) && v.splash) {
+        for (const [r, c] of v.splash(hover.r, hover.c)) { ctx.fillStyle = 'rgba(255,120,40,.35)'; roundRect(px(r) + 2, py(c) + 2, S - 4, S - 4, 6); ctx.fill(); }
+      }
+      if (v.reach && v.reach.has(k) && v.selected) {
+        const u = v.selected, g = sprites.get(u.id);
+        if (g) { ctx.save(); ctx.globalAlpha = 0.5; drawBadge(Object.assign({ faction: WF.Names.faction(v.game, u.side) }, u), x + S / 2, y + S / 2, 0, t, true); ctx.restore(); }
+      }
+    }
+    if (cursor) { ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); roundRect(px(cursor.r) + 4, py(cursor.c) + 4, S - 8, S - 8, 6); ctx.stroke(); ctx.setLineDash([]); }
+    // coach pulses
+    if (v.pulses) for (const p of v.pulses) {
+      const cc = centre(p.r, p.c), k = (t * 1.4) % 1;
+      ctx.strokeStyle = 'rgba(255,225,80,' + (1 - k) + ')'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cc.x, cc.y, S * (0.4 + k * 0.55), 0, TAU); ctx.stroke();
+      ctx.fillStyle = '#ffd24a'; const bob = Math.sin(t * 6) * 4, ay = cc.y - S * 0.62 + bob;
+      ctx.beginPath(); ctx.moveTo(cc.x, ay + 4); ctx.lineTo(cc.x - 9, ay - 11); ctx.lineTo(cc.x + 9, ay - 11); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#5a3d00'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+  }
+
+  // ---- drawing: units ----
+  function drawBadge(u, x, y, lift, t, ghost) {
+    const rad = S * 0.4, allied = u.side === 'allied';
+    ctx.save(); ctx.translate(x, y - lift);
+    if (!ghost) { ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.beginPath(); ctx.ellipse(0, rad * 0.95 + lift, rad * 0.95, rad * 0.32, 0, 0, TAU); ctx.fill(); }
+    const g = ctx.createLinearGradient(0, -rad, 0, rad);
+    if (allied) { g.addColorStop(0, '#4b8be0'); g.addColorStop(1, '#1f4f98'); } else { g.addColorStop(0, '#8b9482'); g.addColorStop(1, '#4e554a'); }
+    ctx.fillStyle = g; ctx.lineWidth = 3;
+    if (allied) { ctx.strokeStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, rad, 0, TAU); }
+    else { ctx.strokeStyle = '#1c1f1a'; ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i * TAU / 8 + TAU / 16; const rr = rad * 1.08; i ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath(); }
+    ctx.fill(); ctx.stroke();
+    if (!allied) { ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2; ctx.save(); ctx.clip(); for (let i = -3; i < 4; i++) { ctx.beginPath(); ctx.moveTo(-rad + i * 7, rad); ctx.lineTo(rad + i * 7, -rad); ctx.stroke(); } ctx.restore(); }
+    ctx.save(); const gs = rad * 1.3; ctx.translate(-gs / 2, -gs / 2); ctx.scale(gs / 24, gs / 24);
+    ctx.fillStyle = allied ? '#f4f8ff' : '#ecebdc'; ctx.fill(glyphPath(glyphKey(u)), u.type === 'artillery' ? 'evenodd' : 'nonzero'); ctx.restore();
+    ctx.restore();
+  }
+
+  function drawUnit(sp, v, t) {
+    const u = sp.u; if (!u) return;
+    let x = sp.x, y = sp.y, alpha = 1, scale = 1;
+    if (sp.lunge) { const k = (now() - sp.lunge.t0) / sp.lunge.dur; if (k >= 1) sp.lunge = null; else { const w = Math.sin(k * Math.PI); x += sp.lunge.x * w; y += sp.lunge.y * w; } }
+    const ap = easeOut((now() - sp.appear) / 350); if (ap < 1) scale = 0.4 + 0.6 * ap + Math.sin(ap * Math.PI) * 0.15;
+    if (sp.dying) { const k = clamp01((now() - sp.dieAt) / 600); alpha = 1 - k; scale = 1 - 0.25 * k; y += k * S * 0.15; }
+    const selected = v.selected && v.selected.id === sp.id;
+    const lift = selected ? 3 + Math.sin(t * 6) * 2 : 0;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y); ctx.scale(scale, scale); ctx.translate(-x, -y);
+    if (selected) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.setLineDash([7, 5]); ctx.lineDashOffset = -t * 20; ctx.beginPath(); ctx.arc(x, y, S * 0.47, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fill(); }
+    if (v.danger && v.danger.has(sp.id)) { const p = 0.5 + 0.5 * Math.sin(t * 7); ctx.strokeStyle = 'rgba(255,60,50,' + (0.5 + 0.5 * p) + ')'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(x, y, S * (0.46 + 0.03 * p), 0, TAU); ctx.stroke(); }
+    drawBadge(u, x, y, lift, t, false);
+    if (sp.flash && now() - sp.flash < 260) { ctx.fillStyle = 'rgba(255,255,255,' + (0.7 * (1 - (now() - sp.flash) / 260)) + ')'; ctx.beginPath(); ctx.arc(x, y - lift, S * 0.38, 0, TAU); ctx.fill(); }
+    if (u.acted && u.side === 'allied' && !sp.dying) { ctx.fillStyle = 'rgba(30,35,40,.42)'; ctx.beginPath(); ctx.arc(x, y - lift, S * 0.37, 0, TAU); ctx.fill(); }
+    // strength bar + number
+    const str = sp.hold ? sp.ds : u.strength, max = Math.max(u.max || 10, str), ratio = clamp01(str / 10), bw = S * 0.74, bh = Math.max(4, S * 0.08), bx = x - bw / 2, by = y + S * 0.41;
+    ctx.fillStyle = 'rgba(0,0,0,.65)'; roundRect(bx - 1.5, by - 1.5, bw + 3, bh + 3, 3); ctx.fill();
+    ctx.fillStyle = ratio > 0.55 ? '#62d04f' : ratio > 0.3 ? '#f2c230' : '#f0483c'; ctx.fillRect(bx, by, bw * ratio, bh);
+    const nr = S * 0.17, nx = x + S * 0.34, ny = y - S * 0.34;
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(nx, ny, nr, 0, TAU); ctx.fill(); ctx.stroke();
+    const sv = Math.max(0, Math.round(str)); ctx.fillStyle = '#111'; ctx.font = '800 ' + Math.round(nr * (sv >= 10 ? 0.98 : 1.25)) + 'px Atkinson Hyperlegible, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(Math.max(0, Math.round(str))), nx, ny + 0.5);
+    if (u.acted && u.side === 'allied' && !sp.dying) { ctx.fillStyle = '#7be07b'; ctx.font = '800 ' + Math.round(S * 0.26) + 'px sans-serif'; ctx.fillText('✓', x - S * 0.3, y - S * 0.3); }
+    if (u.side === 'allied' && !u.acted && !sp.dying && u.strength < u.max && u.inTrench) {
+      const hx = x - S * 0.34, hy = y + S * 0.02, hr = S * (0.12 + 0.015 * Math.sin(t * 5));
+      ctx.fillStyle = '#2fa84a'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hx, hy, hr, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.fillRect(hx - hr * 0.6, hy - hr * 0.16, hr * 1.2, hr * 0.32); ctx.fillRect(hx - hr * 0.16, hy - hr * 0.6, hr * 0.32, hr * 1.2);
+    }
+    if (u.broken) { ctx.fillStyle = '#ff4a3c'; ctx.font = '800 ' + Math.round(S * 0.36) + 'px sans-serif'; ctx.fillText('✕', x, y); }
+    ctx.restore();
+  }
+
+  // ---- drawing: effects ----
+  function drawFx(t0) {
+    const t = now();
+    for (const f of fx) {
+      const el = t - f.t0 - (f.delay || 0); if (el < 0) continue;
+      const k = clamp01(el / (f.dur - (f.delay || 0)));
+      ctx.save();
+      if (f.k === 'boom') {
+        const R = S * (f.big ? 1.5 : 0.95);
+        ctx.fillStyle = 'rgba(255,240,200,' + (0.9 * (1 - k * 3 > 0 ? 1 - k * 3 : 0)) + ')'; ctx.beginPath(); ctx.arc(f.x, f.y, R * 0.5 * easeOut(k * 2.5), 0, TAU); ctx.fill();
+        const g = ctx.createRadialGradient(f.x, f.y, 2, f.x, f.y, R * easeOut(k * 1.6) + 4); g.addColorStop(0, 'rgba(255,200,70,' + (0.95 * (1 - k)) + ')'); g.addColorStop(0.5, 'rgba(230,90,20,' + (0.7 * (1 - k)) + ')'); g.addColorStop(1, 'rgba(60,40,30,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(f.x, f.y, R * easeOut(k * 1.6) + 4, 0, TAU); ctx.fill();
+        for (let i = 0; i < (f.big ? 14 : 9); i++) { const a = hash(f.seed, i, 1) * TAU, d = R * (0.4 + hash(f.seed, i, 2)) * easeOut(k), s = S * 0.08 * (1 - k); ctx.fillStyle = 'rgba(70,50,32,' + (1 - k) + ')'; ctx.beginPath(); ctx.arc(f.x + Math.cos(a) * d, f.y + Math.sin(a) * d - k * S * 0.2 + k * k * S * 0.4, s + 1, 0, TAU); ctx.fill(); }
+        for (let i = 0; i < 5; i++) { const a = hash(f.seed, i, 5) * TAU, d = R * 0.5 * easeOut(k); ctx.fillStyle = 'rgba(50,48,46,' + (0.45 * (1 - k)) + ')'; ctx.beginPath(); ctx.arc(f.x + Math.cos(a) * d * 0.6, f.y - k * S * 0.6 + Math.sin(a) * d * 0.3, S * (0.18 + 0.2 * k), 0, TAU); ctx.fill(); }
+      } else if (f.k === 'tracer') {
+        const head = clamp01(k * 1.6), tail = clamp01(k * 1.6 - 0.35);
+        const hx = f.a.x + (f.b.x - f.a.x) * head, hy = f.a.y + (f.b.y - f.a.y) * head, tx = f.a.x + (f.b.x - f.a.x) * tail, ty = f.a.y + (f.b.y - f.a.y) * tail;
+        ctx.strokeStyle = 'rgba(255,230,120,.95)'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 7]); ctx.lineDashOffset = -el * 0.4; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke(); ctx.setLineDash([]);
+        if (k < 0.3) { ctx.fillStyle = 'rgba(255,240,170,' + (1 - k / 0.3) + ')'; ctx.beginPath(); ctx.arc(f.a.x, f.a.y, S * 0.2, 0, TAU); ctx.fill(); }
+        if (k > 0.7) { ctx.fillStyle = 'rgba(255,200,90,' + (1 - (k - 0.7) / 0.3) + ')'; ctx.beginPath(); ctx.arc(f.b.x, f.b.y, S * 0.14, 0, TAU); ctx.fill(); }
+      } else if (f.k === 'clash') {
+        ctx.strokeStyle = 'rgba(255,245,200,' + (1 - k) + ')'; ctx.lineWidth = 3;
+        for (let i = 0; i < 9; i++) { const a = i * TAU / 9 + 0.3, d1 = S * 0.12 + k * S * 0.2, d2 = d1 + S * 0.22 * (1 - k); ctx.beginPath(); ctx.moveTo(f.x + Math.cos(a) * d1, f.y + Math.sin(a) * d1); ctx.lineTo(f.x + Math.cos(a) * d2, f.y + Math.sin(a) * d2); ctx.stroke(); }
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.8 * (1 - k * 2 > 0 ? 1 - k * 2 : 0)) + ')'; ctx.beginPath(); ctx.arc(f.x, f.y, S * 0.25, 0, TAU); ctx.fill();
+      } else if (f.k === 'dirt') {
+        for (let i = 0; i < 12; i++) { const a = hash(f.seed, i, 3) * TAU, d = S * (0.1 + 0.4 * hash(f.seed, i, 4)) * easeOut(k); ctx.fillStyle = 'rgba(86,62,38,' + (1 - k) + ')'; ctx.beginPath(); ctx.arc(f.x + Math.cos(a) * d, f.y + Math.sin(a) * d - Math.sin(k * Math.PI) * S * 0.3, S * 0.05 + 1, 0, TAU); ctx.fill(); }
+      } else if (f.k === 'gas') {
+        for (const c of f.cells) for (let i = 0; i < 7; i++) { const a = hash(f.seed, i, 6) * TAU + el * 0.0008, d = S * 0.35 * hash(f.seed, i, 7); ctx.fillStyle = 'rgba(150,220,70,' + (0.33 * Math.sin(k * Math.PI)) + ')'; ctx.beginPath(); ctx.arc(c.x + Math.cos(a) * d, c.y + Math.sin(a) * d, S * (0.3 + 0.18 * easeOut(k)), 0, TAU); ctx.fill(); }
+      } else if (f.k === 'float') {
+        const yy = f.y - easeOut(k) * S * 0.7;
+        ctx.globalAlpha = 1 - clamp01((k - 0.6) / 0.4); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '700 ' + Math.round(S * 0.5) + 'px Oswald, Impact, sans-serif'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.strokeText(f.sub || f.text, f.x, yy); ctx.fillStyle = f.col; ctx.fillText(f.sub || f.text, f.x, yy);
+      }
+      ctx.restore();
+    }
+  }
+
+  // ---- frame loop ----
+  function frame(ts) {
+    requestAnimationFrame(frame);
+    if (!ctx || !view || !bg) return;
+    const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016); lastTs = ts;
+    update(dt);
+    const t = ts / 1000, g = view.game;
+    ctx.setTransform(dpr, 0, 0, dpr, (Math.random() - 0.5) * shake * dpr, (Math.random() - 0.5) * shake * dpr);
+    ctx.clearRect(-20, -20, W + 40, H + 40);
+    ctx.drawImage(bg, 0, 0, W, H);
+    WF._game = g;
+    drawOwnership(g); drawTerrain(g, t);
+    const tint = TINT[g.year]; if (tint) { ctx.fillStyle = tint; ctx.fillRect(seaW, 0, ROWS * S, H); }
+    drawOverlays(view, t);
+    const list = [...sprites.values()].sort((a, b) => a.y - b.y);
+    for (const sp of list) drawUnit(sp, view, t);
+    drawFx();
+    drawAmbient(t, ts);
+  }
+
+  // ---- ambient: year colour grading, drifting smoke, distant gun flashes, vignette ----
+  const TINT = { 1914: 'rgba(255,214,140,.07)', 1915: 'rgba(200,190,160,.05)', 1916: 'rgba(130,125,110,.10)', 1917: 'rgba(95,100,105,.15)', 1918: 'rgba(70,82,100,.17)' };
+  let flashAt = 0, flashY = 0, flashX = 0;
+  function drawAmbient(t, ts) {
+    ctx.save();
+    for (let i = 0; i < 5; i++) {
+      const x = ((t * (6 + i * 2) + i * 260) % (W + 300)) - 150, y = H * (0.15 + 0.17 * i) + Math.sin(t * 0.3 + i) * 20, r = S * (2.2 + i * 0.3);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(210,205,195,.07)'); g.addColorStop(1, 'rgba(210,205,195,0)');
+      ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    if (ts > flashAt) { flashAt = ts + 2500 + Math.random() * 4500; flashX = seaW + Math.random() * ROWS * S; flashY = Math.random() < 0.7 ? 0 : H; flashT0 = ts; }
+    const fk = (ts - flashT0) / 380;
+    if (fk >= 0 && fk < 1) { const g = ctx.createRadialGradient(flashX, flashY, 0, flashX, flashY, S * 2.4); g.addColorStop(0, 'rgba(255,200,110,' + 0.35 * (1 - fk) + ')'); g.addColorStop(1, 'rgba(255,160,60,0)'); ctx.fillStyle = g; ctx.fillRect(flashX - S * 2.4, Math.max(0, flashY - S * 2.4), S * 4.8, S * 4.8); }
+    const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.75);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.32)');
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+
+  // ---- input ----
+  function eventCell(e) {
+    const rect = canvas.getBoundingClientRect();
+    return cellAt((e.clientX - rect.left) * (W / rect.width), (e.clientY - rect.top) * (H / rect.height));
+  }
+
+  function init(cv, wr, h) {
+    canvas = cv; wrap = wr; handlers = h; ctx = canvas.getContext('2d');
+    canvas.addEventListener('mousemove', e => { hover = eventCell(e); handlers.onHover && handlers.onHover(hover, e.clientX, e.clientY); });
+    canvas.addEventListener('mouseleave', () => { hover = null; handlers.onHover && handlers.onHover(null); });
+    canvas.addEventListener('click', e => { const c = eventCell(e); if (c) { cursor = null; handlers.onCell(c.r, c.c); } });
+    canvas.addEventListener('keydown', e => {
+      const d0 = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key], d = d0 && [flip ? -d0[0] : d0[0], d0[1]];
+      if (d) { e.preventDefault(); cursor = cursor ? { r: cursor.r + d[0], c: cursor.c + d[1] } : { r: 8, c: 3 }; if (!M.inBounds(cursor.r, cursor.c)) cursor = { r: Math.min(ROWS - 1, Math.max(0, cursor.r)), c: Math.min(COLS - 1, Math.max(0, cursor.c)) }; hover = cursor; handlers.onHover && handlers.onHover(hover, 0, 0, true); }
+      else if ((e.key === 'Enter' || e.key === ' ') && cursor) { e.preventDefault(); handlers.onCell(cursor.r, cursor.c); }
+      else if (e.key === 'Escape') handlers.onCancel && handlers.onCancel();
+    });
+    window.addEventListener('resize', () => { clearTimeout(init._t); init._t = setTimeout(resize, 120); });
+    if (window.ResizeObserver) new ResizeObserver(() => { clearTimeout(init._t); init._t = setTimeout(resize, 80); }).observe(wrap);
+    resize();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+    requestAnimationFrame(frame);
+  }
+
+  function setView(v) {
+    view = v;
+    if (v && v.game) {
+      if (v.game.player !== lastPlayer) {
+        lastPlayer = v.game.player; flip = lastPlayer === 'german';
+        meName = WF.Names.me(v.game).toUpperCase(); foeName = WF.Names.foe(v.game).toUpperCase();
+        for (const sp of sprites.values()) sp.hold = false; sprites.clear();
+        resize();
+      }
+      sync(v.game);
+    }
+  }
+  function setZoom(z) { zoom = z; resize(); }
+  function scrollTo(r, c) { if (!wrap) return; const p = centre(r, c); wrap.scrollTo({ left: p.x - wrap.clientWidth / 2, top: p.y - wrap.clientHeight / 2, behavior: 'smooth' }); }
+  const isBusy = () => queue.length > 0 || fx.some(f => f.k !== 'float' && f.k !== 'dirt');
+  function whenIdle(cb) { if (!isBusy()) cb(); else idleCbs.push(cb); }
+  function screenPos(r, c) { const rect = canvas.getBoundingClientRect(), p = centre(r, c); return { x: rect.left + p.x * rect.width / W, y: rect.top + p.y * rect.height / H, size: S * rect.width / W }; }
+
+  return { init, setView, enqueue, isBusy, whenIdle, setZoom, scrollTo, resize, screenPos };
+})();
+
+// The "sergeant": plain-language hints and the scripted opening tutorial.
+// Returns what to say and which squares to point at, based only on the current state.
+globalThis.WF = globalThis.WF || {};
+
+WF.Coach = (function () {
+  const C = WF.CONFIG, M = WF.Map, U = WF.Units, K = WF.Combat, N = WF.Names;
+
+  function firstIdle(g, types) {
+    return g.units.find(u => u.side === 'allied' && !u.acted && (!types || types.includes(u.type)));
+  }
+
+  // v: the view built by main.js. Returns { text, tone, pulses, pulseEnd }
+  function advise(g, v) {
+    const sel = v.selected;
+    const t = g.tut, E = N.foe(g), EP = N.foeP(g);
+
+    if (g.over) return { text: 'The war is over.', tone: 'info' };
+
+    // ---- scripted opening (1914) ----
+    if (g.year === C.startYear && !g.tutorialDone) {
+      if (!t.moved) {
+        if (!sel || sel.side !== 'allied') {
+          const u = g.units.find(x => x.side === 'allied' && x.type === 'infantry' && x.r === 8 && x.c === 3) || firstIdle(g, ['infantry']);
+          return { text: 'Welcome, Captain. These are your soldiers (blue circles). <b>Click one to select it.</b>', tone: 'info', pulses: u ? [{ r: u.r, c: u.c }] : [] };
+        }
+        return { text: 'Good. The glowing squares show where this soldier can walk. <b>Click one ahead of you to advance.</b> Careful: the red striped squares are covered by ' + E + ' machine guns.', tone: 'info',
+          pulses: v.reach ? [...v.reach.values()].filter(p => p.c > sel.c).slice(0, 1).map(p => ({ r: p.r, c: p.c })) : [] };
+      }
+      if (!t.dug) {
+        const u = g.units.find(x => x.side === 'allied' && !x.acted && x.type === 'infantry' && !(sel && sel.id === x.id)) || firstIdle(g, ['infantry']);
+        if (sel && sel.side === 'allied' && !sel.acted && K.canDig(g, sel)) return { text: 'Soldiers in the open get shot. <b>Press DIG IN</b> to build a trench: it cuts the damage they take by 40% or more.', tone: 'info', pulseDig: true };
+        return { text: 'Nice. Now protect another soldier: <b>select it, then press Dig In.</b>', tone: 'info', pulses: u ? [{ r: u.r, c: u.c }] : [] };
+      }
+      if (!t.ended) return { text: 'Good. Move or dig with the rest if you like. When you are ready, <b>press END TURN.</b> ' + EP + ' move next.', tone: 'info', pulseEnd: true };
+      if (!t.attacked && g.turnCount <= 3) {
+        const adj = g.units.find(u => u.side === 'allied' && K.attackTargets(g, u).length);
+        if (adj && !adj.acted) return { text: 'An enemy is next to your soldier! <b>Select it, then click the red target.</b> Hover over the target first to see the odds.', tone: 'warn', pulses: [{ r: adj.r, c: adj.c }] };
+      }
+    }
+
+    // Everything below is a one-time tip. Once the player has acted while a tip was showing,
+    // it never appears again, so the sergeant disappears when there is nothing left to teach.
+    const tip = (key, o) => (g.tips && g.tips[key] ? null : Object.assign({ key }, o));
+    const wounded = u => u.side === 'allied' && u.strength < u.max;
+
+    if (v.mode === 'place') return tip('place', { text: 'Click a glowing green square in your rear (bottom of the map) to place the new unit.', tone: 'info' });
+
+    if (sel && sel.side === 'allied') {
+      if (sel.broken) return tip('broken', { text: 'This tank broke down. Early tanks failed all the time. It can\'t act this turn.', tone: 'warn' });
+      if (sel.acted) return null;
+      const danger = v.danger && v.danger.has(sel.id), inTrench = g.map[sel.r][sel.c].trench > 0;
+      if (sel.type === 'artillery') return tip('artillery', { text: 'Artillery: <b>click an amber square</b> to shell it. Shells hurt everyone there, wreck wire, and leave craters your own soldiers must cross later.', tone: 'info' });
+      if (sel.type === 'gas') return tip('gasunit', { text: 'Gas company: <b>click an amber square</b> for a one-time gas attack on 3 squares. It works best the first time.', tone: 'info' });
+      if (sel.type === 'tank') return tip('tank', { text: 'Tanks cross wire and trenches, and machine guns barely scratch them. But they break down often.', tone: 'info' });
+      if (sel.type === 'storm') return tip('storm', { text: 'Stormtroopers run <b>past</b> enemy squares instead of stopping. Use them to rush a gold-star rail hub.', tone: 'info' });
+      if (wounded(sel)) return tip('heal', { text: 'This unit is <b>wounded</b> (' + sel.strength + ' of ' + sel.max + '). ' + (inTrench ? '<b>Press REST</b> to recover 1,000 men.' : 'Units only heal in a trench. <b>Dig in, then Rest</b> on a later turn.'), tone: 'good' });
+      if (danger) return tip('danger', { text: '<b>This unit is under machine-gun fire!</b> Dig in, or pull back out of the red zone.', tone: 'warn' });
+      if (K.attackTargets(g, sel).length) return tip('odds', { text: 'Enemy next to you. <b>Hover over the red target to see the odds</b> before you attack. Bad odds? Dig in instead.', tone: 'info' });
+      return null;
+    }
+
+    const exposed = v.danger ? v.danger.size : 0;
+    if (exposed) return tip('danger', { text: '<b>' + exposed + ' of your units ' + (exposed === 1 ? 'is' : 'are') + ' in machine-gun fire</b> (red rings). They will take damage when you end your turn.', tone: 'warn' });
+    if (g.units.some(u => wounded(u) && !u.acted && g.map[u.r][u.c].trench > 0)) return tip('heal', { text: 'Some of your soldiers are <b>wounded</b> (green + sign). Select one that is dug in and press <b>Rest</b> to recover 1,000 men.', tone: 'good' });
+    if (g.year === 1915 && g.manpower >= 3) return tip('y1915', { text: 'New weapon: <b>gas</b>. Recruit a Gas Company. The first attack is devastating, but the enemy will adapt.', tone: 'good' });
+    if (g.year === 1916) return tip('y1916', { text: 'Long Barrage is unlocked for your artillery: heavy damage, but the ' + EP + ' see it coming and send reserves.', tone: 'info' });
+    if (g.year === 1917) return tip('y1917', { text: 'Tanks are available. Recruit them, and bombard a square the same turn you attack it: the defenders can\'t use their machine guns.', tone: 'info' });
+    if (g.year === 1918) return tip('y1918', { text: 'Stormtroopers can slip past the line. Shell, then send tanks and infantry, then rush a hub with stormtroopers.', tone: 'info' });
+    return null;
+  }
+
+  return { advise };
+})();
+
+// DOM panels: HUD, sergeant, unit card, action buttons, recruits, log, dialogs, tooltip.
+// No game rules live here.
+globalThis.WF = globalThis.WF || {};
+
+WF.UI = (function () {
+  const C = WF.CONFIG, M = WF.Map, U = WF.Units, N = WF.Names;
+  const openWhy = new Set();
+  const $ = id => document.getElementById(id);
+  let handlers = {}, bannerTimer = null, lastLogLen = -1;
+  const ICON = {
+    dig: 'M17.5 2.5l4 4-2 2-4-4zM14.5 5.5l4 4L11 17.5 6.5 19l-1-1.5L7 13z',
+    rest: 'M6 4h4v16H6zM14 4h4v16h-4z',
+    move: 'M12 2l7 8h-4.5v12h-5V10H5z',
+    long: 'M2.5 14.5 15 5.2l2.4 3.1L5 17.6zM21 3l1 5-2-1-2 3-1-5 2 1z',
+  };
+  const glyph = (key, cls) => '<svg class="' + (cls || 'ico') + '" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="' + (WF.GLYPH[key] || ICON[key]) + '"/></svg>';
+  const helmet = (g, side) => (N.faction(g, side) === 'german' ? 'infantryGerman' : 'infantryAllied');
+  const unitGlyph = (g, u) => glyph(u.type === 'infantry' ? helmet(g, u.side) : u.type);
+  const typeGlyph = (g, t) => glyph(t === 'infantry' ? helmet(g, 'allied') : t);
+
+  function init(h) {
+    handlers = h;
+    $('endturn').addEventListener('click', () => handlers.onEndTurn());
+    $('btn-help').addEventListener('click', () => handlers.onHelp());
+    $('btn-zoom').addEventListener('click', () => handlers.onZoom());
+    $('btn-sound').addEventListener('click', () => handlers.onSound());
+    $('btn-full').addEventListener('click', () => handlers.onFull());
+    $('btn-menu').addEventListener('click', () => handlers.onMenu());
+    $('menu-continue').addEventListener('click', () => handlers.onMenuContinue());
+    $('menu-new').addEventListener('click', () => handlers.onMenuNew());
+    $('menu-help').addEventListener('click', () => handlers.onHelp());
+    $('menu-length').addEventListener('change', e => handlers.onLength(+e.target.value));
+    $('newgame').addEventListener('click', () => handlers.onNewGame());
+    $('actions').addEventListener('click', e => { const b = e.target.closest('button[data-a]'); if (b && !b.disabled) handlers.onAction(b.dataset.a); });
+    $('recruit').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (b && !b.disabled) handlers.onRecruit(b.dataset.t); });
+    document.addEventListener('keydown', e => {
+      if ($('overlay').hidden && (e.key === 'e' || e.key === 'E') && !e.ctrlKey && !e.metaKey && !/input|textarea/i.test(e.target.tagName)) handlers.onEndTurn();
+    });
+  }
+
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+  function renderHud(g, v) {
+    // timeline of years
+    const tl = $('timeline'); let h = '';
+    for (let y = C.startYear; y <= C.endYear; y++) {
+      const cls = y < g.year ? 'done' : y === g.year ? 'now' : '';
+      let pips = '';
+      if (y === g.year) { for (let i = 1; i <= g.turnsPerYear; i++) pips += '<i class="' + (i < g.turn ? 'p done' : i === g.turn ? 'p now' : 'p') + '"></i>'; }
+      h += '<li class="' + cls + '"><span>' + y + '</span>' + (pips ? '<span class="pips">' + pips + '</span>' : '') + '</li>';
+    }
+    tl.innerHTML = h;
+    $('cas').textContent = (g.casualties * C.menPerStrength).toLocaleString();
+    const m = Math.max(0, Math.round(g.morale));
+    $('mor-fill').style.width = m + '%';
+    $('mor-fill').className = m > 60 ? '' : m > 30 ? 'mid' : 'low';
+    $('mor-bar').setAttribute('aria-valuenow', m);
+    $('mor-bar').title = 'Home-front morale: ' + m + '%';
+    // goal distance
+    let best = null;
+    for (const u of g.units) if (u.side === 'allied' && u.type !== 'artillery' && u.type !== 'gas') for (const hub of C.hubs) { const d = M.distance(u.r, u.c, hub.r, hub.c); if (best === null || d < best) best = d; }
+    $('goal-text').innerHTML = best === 0 ? 'On the hub! <b>Hold it through the enemy turn.</b>' : 'Capture a \u2605 rail hub' + (best !== null ? ' <b>(' + best + ' away)</b>' : '');
+    const sb = $('btn-sound'); sb.textContent = WF.Audio.isMuted() ? 'Sound off' : 'Sound on';
+  }
+
+  function renderAdvisor(adv) {
+    const a = $('advisor');
+    a.hidden = !adv;
+    if (!adv) return;
+    a.className = 'advisor ' + (adv.tone || 'info');
+    if ($('advice').innerHTML !== adv.text) $('advice').innerHTML = adv.text;
+  }
+
+  function renderUnitCard(g, v) {
+    const u = v.selected, box = $('unitcard');
+    if (!u) { box.hidden = true; return; }
+    box.hidden = false;
+    const def = C.units[u.type], cell = g.map[u.r][u.c];
+    let status = u.side === 'german' ? 'Enemy' : u.broken ? 'Broken down' : u.acted ? 'Done this turn' : 'Ready';
+    const cover = cell.trench ? 'In a trench (level ' + cell.trench + '): ' + [0, 40, 60, 80][cell.trench] + '% less damage' : 'In the open: no protection';
+    box.className = 'card-unit ' + u.side;
+    box.innerHTML = '<div class="uicon">' + unitGlyph(g, u) + '</div><div class="ubody"><b>' + N.adj(g, u.side) + ' ' + def.name + '</b>' +
+      '<span class="men">' + (u.strength * C.menPerStrength).toLocaleString() + ' men</span>' +
+      '<span class="meta">' + status + ' · ' + cover + '</span><span class="role">' + def.role + '</span></div>';
+  }
+
+  function btn(a, icon, label, desc, active, disabled) {
+    return '<button type="button" class="abtn' + (active ? ' on' : '') + '" data-a="' + a + '"' + (disabled ? ' disabled' : '') + '>' + glyph(icon) +
+      '<span><b>' + label + '</b><small>' + desc + '</small></span></button>';
+  }
+
+  function renderActions(g, v) {
+    const box = $('actions'), a = v.actions, u = v.selected;
+    if (!u || u.side !== 'allied') { box.innerHTML = ''; box.hidden = true; return; }
+    box.hidden = false;
+    let h = '';
+    if (a.move && (v.mode !== 'move')) h += btn('move', 'move', 'Move instead', 'Walk to a nearby square', false, false);
+    if (a.dig) { const lvl = g.map[u.r][u.c].trench; h += btn('dig', 'dig', 'Dig in', 'Trench level ' + (lvl + 1) + ': ' + [0, 40, 60, 80][lvl + 1] + '% less damage', false, false) + ''; }
+    else if (['infantry', 'machinegun', 'storm'].includes(u.type) && g.map[u.r][u.c].trench >= 3) h += btn('dig', 'dig', 'Fully dug in', 'Maximum trench level', false, true);
+    if (u.type === 'artillery') {
+      h += btn('bombard', 'artillery', 'Shell', 'Hit one square within 4', v.mode === 'bombard', !a.bombard);
+      if (g.year >= C.bombard.long.unlockYear) h += btn('long', 'long', 'Long barrage', 'Heavy damage, but it warns the enemy', v.mode === 'long', !a.long);
+    }
+    if (u.type === 'gas') h += btn('gas', 'gas', 'Gas attack', 'One-time hit on 3 squares', v.mode === 'gas', !a.gas);
+    if (a.hold) {
+      const tr = g.map[u.r][u.c].trench > 0, hurtU = u.strength < u.max;
+      h += btn('hold', 'rest', tr && hurtU ? 'Rest and heal' : tr ? 'Rest' : 'Skip',
+        tr && hurtU ? 'Recover 1,000 men (' + u.strength + ' of ' + u.max + ')' : tr ? 'Already at full strength' : hurtU ? 'Skip. Units only heal in a trench' : 'End this unit\'s turn', false, false);
+    }
+    box.innerHTML = h;
+  }
+
+  function renderRecruit(g, v) {
+    const box = $('recruit'); let h = '<div class="rec-head"><b>Reinforcements</b><span>' + g.manpower + ' points</span></div><div class="rec-row">';
+    for (const o of v.recruit) {
+      h += '<button type="button" class="rbtn' + (v.recruitType === o.type ? ' on' : '') + '" data-t="' + o.type + '"' + (o.ok ? '' : ' disabled') + ' title="' + o.name + ': costs ' + o.cost + ' points">' +
+        typeGlyph(g, o.type) + '<span>' + o.name + '</span><em>' + o.cost + '</em></button>';
+    }
+    box.innerHTML = h + '</div>';
+  }
+
+  function renderLog(g) {
+    const ol = $('log'), msgs = g.log.slice(-40), base = g.log.length - msgs.length;
+    if (g.log.length === lastLogLen) return;
+    lastLogLen = g.log.length;
+    ol.innerHTML = '';
+    msgs.forEach((m, i) => {
+      const li = document.createElement('li'); if (m.kind) li.className = m.kind;
+      if (m.why) {
+        const id = base + i, open = openWhy.has(id);
+        li.classList.add('has-why');
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'why-btn'; b.setAttribute('aria-expanded', open);
+        b.innerHTML = '<span></span><i>Why?</i>'; b.firstChild.textContent = m.text;
+        const w = document.createElement('div'); w.className = 'why'; w.textContent = m.why; w.hidden = !open;
+        b.addEventListener('click', () => { const o = w.hidden; w.hidden = !o; b.setAttribute('aria-expanded', o); o ? openWhy.add(id) : openWhy.delete(id); });
+        li.appendChild(b); li.appendChild(w);
+      } else li.textContent = m.text;
+      ol.appendChild(li);
+    });
+    ol.scrollTop = ol.scrollHeight;
+  }
+
+  function render(g, v, adv) {
+    renderHud(g, v);
+    renderAdvisor(adv);
+    renderUnitCard(g, v);
+    renderActions(g, v);
+    renderRecruit(g, v);
+    renderLog(g);
+    const idle = g.units.filter(u => u.side === 'allied' && !u.acted && !u.broken).length;
+    const e = $('endturn');
+    e.disabled = g.over || v.locked;
+    $('idle').textContent = idle ? idle + ' unit' + (idle === 1 ? '' : 's') + ' still can act' : 'all units have acted';
+    e.classList.toggle('attn', !!(adv && adv.pulseEnd));
+    for (const b of document.querySelectorAll('#actions button[data-a="dig"]')) b.classList.toggle('attn', !!(adv && adv.pulseDig));
+  }
+
+  // ---- tooltip / banner ----
+  function showTip(html, x, y) {
+    const t = $('tip'); t.innerHTML = html; t.hidden = false;
+    const st = $('stage').getBoundingClientRect();
+    let left = x - st.left + 16, top = y - st.top + 16;
+    t.style.left = '0px'; t.style.top = '0px';
+    const tw = t.offsetWidth, th = t.offsetHeight;
+    if (left + tw > st.width - 8) left = x - st.left - tw - 16;
+    if (top + th > st.height - 8) top = y - st.top - th - 16;
+    t.style.left = Math.max(4, left) + 'px'; t.style.top = Math.max(4, top) + 'px';
+  }
+  function hideTip() { $('tip').hidden = true; }
+  function banner(text, sub) {
+    const b = $('banner'); b.innerHTML = '<b>' + text + '</b>' + (sub ? '<span>' + sub + '</span>' : '');
+    b.hidden = false; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    clearTimeout(bannerTimer); bannerTimer = setTimeout(() => { b.hidden = true; }, 1500);
+  }
+
+  // ---- dialogs ----
+  function card(o) {
+    $('ov-kicker').textContent = o.kicker || ''; $('ov-kicker').hidden = !o.kicker;
+    $('ov-title').textContent = o.title; $('ov-body').innerHTML = o.html || '';
+    $('overlay').className = o.className || '';
+    const bar = document.querySelector('#overlay .sheet-buttons');
+    for (const x of bar.querySelectorAll('.extra')) x.remove();
+    if (o.choices) {
+      const wrap = document.createElement('div'); wrap.className = 'choices';
+      for (const ch of o.choices) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'choice';
+        b.innerHTML = '<b></b><span></span>'; b.firstChild.textContent = ch.label; b.lastChild.textContent = ch.sub;
+        b.onclick = () => { $('overlay').hidden = true; ch.onClick(); };
+        wrap.appendChild(b);
+      }
+      $('ov-body').appendChild(wrap);
+    }
+    const b = $('ov-btn'); b.hidden = !!o.choices; b.textContent = o.button || 'OK';
+    b.onclick = () => { $('overlay').hidden = true; o.onClick && o.onClick(); };
+    for (const ex of o.extra || []) {
+      const eb = document.createElement('button'); eb.type = 'button'; eb.className = 'btn ghost extra'; eb.textContent = ex.label;
+      eb.onclick = () => ex.onClick(); bar.insertBefore(eb, b);
+    }
+    const c = $('ov-cancel'); c.hidden = !o.cancel; c.textContent = o.cancel || '';
+    c.onclick = () => { $('overlay').hidden = true; o.onCancel && o.onCancel(); };
+    $('overlay').hidden = false;
+    document.querySelector('#overlay .sheet').scrollTop = 0;
+    (o.choices ? document.querySelector('#overlay .choice') : b).focus({ preventScroll: true });
+  }
+
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function copyText(text, status) {
+    const fallback = () => {
+      let box = document.getElementById('copy-box');
+      if (!box) { box = document.createElement('textarea'); box.id = 'copy-box'; box.readOnly = true; box.rows = 8; document.getElementById('ov-body').appendChild(box); }
+      box.value = text; box.select(); status.textContent = 'Press Ctrl+C (or Cmd+C) to copy the text above.';
+    };
+    try { navigator.clipboard.writeText(text).then(() => { status.textContent = 'Copied. Paste it into your document.'; }, fallback); } catch (e) { fallback(); }
+  }
+
+  function menu(o) {
+    $('menu-continue').hidden = !o.canContinue;
+    $('menu-continue-sub').textContent = o.summary || '';
+    $('menu-continue').firstChild.textContent = o.inSession ? 'Resume game' : 'Continue';
+    $('menu-length').value = String(o.length);
+    $('menu').hidden = false;
+    ($('menu-continue').hidden ? $('menu-new') : $('menu-continue')).focus({ preventScroll: true });
+  }
+  function closeMenu() { $('menu').hidden = true; }
+  const menuOpen = () => !$('menu').hidden;
+
+  function endScreen(sum, onAgain, g, onMenu) {
+    const stats = sum.stats.map(r => '<div class="big"><b>' + esc(r[1]) + '</b><span>' + esc(r[0]) + '</span></div>').join('');
+    const causes = sum.causes.length ? '<h3>Where your losses came from</h3><div class="causes">' + sum.causes.map(c =>
+      '<div class="cause"><span>' + esc(c.label) + '</span><div class="cbar"><i style="width:' + Math.max(3, Math.round(c.share * 100)) + '%"></i></div><b>' + c.men.toLocaleString() + '</b></div>').join('') + '</div>' : '';
+    const moments = sum.moments.length ? '<h3>Key moments</h3><ul class="moments">' + sum.moments.map(m => '<li><b>' + esc(m.label) + '</b> ' + esc(m.text) + '</li>').join('') + '</ul>' : '';
+    const qa = sum.questions.map((q, i) => '<div class="qa"><label for="qa-' + i + '">' + (i + 1) + '. ' + esc(q.q) + '</label><div class="qdata">Your game: ' + esc(q.data) + '</div>' +
+      '<textarea id="qa-' + i + '" rows="3" placeholder="Answer in your own words, using your results above."></textarea></div>').join('');
+    card({
+      kicker: sum.type === 'armistice' ? 'November 11, 1918' : sum.type === 'breakthrough' ? 'Victory' : 'Defeat',
+      title: sum.title, className: 'ending ' + sum.type,
+      html: '<p class="lead">' + sum.lead + '</p><div class="bigs">' + stats + '</div>' + causes + moments +
+        '<h3>How does that compare?</h3><ul>' + sum.comparisons.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul>' +
+        '<h3>Debrief: answer these using your game</h3>' + qa +
+        '<div class="who-field"><label for="qa-name">Your name (optional, for your copy only)</label><input id="qa-name" type="text" maxlength="60" autocomplete="off"></div>' +
+        '<p id="copy-status" class="dim" aria-live="polite">When you are done, press Copy my results and paste them into your assignment.</p>',
+      extra: [{ label: 'Copy my results', onClick: () => {
+        const answers = sum.questions.map((q, i) => (document.getElementById('qa-' + i) || {}).value || '');
+        copyText(WF.Years.report(sum, answers, (document.getElementById('qa-name') || {}).value || ''), document.getElementById('copy-status'));
+      } }, { label: 'Main menu', onClick: () => { $('overlay').hidden = true; onMenu && onMenu(); } }],
+      button: 'Play again', onClick: onAgain,
+    });
+  }
+
+  return { init, render, showTip, hideTip, banner, card, endScreen, glyph, menu, closeMenu, menuOpen };
+})();
+
+// Game state, turn order, and input handling.
+globalThis.WF = globalThis.WF || {};
+
+WF.Game = (function () {
+  const C = WF.CONFIG, M = WF.Map, U = WF.Units, K = WF.Combat, Y = WF.Years;
+  let game = null, selectedId = null, mode = 'move', recruitType = null, locked = false, zoomIdx = 0;
+  const ZOOMS = [[1, 'Zoom: Fit'], [1.4, 'Zoom: Large'], [1.9, 'Zoom: Huge']];
+
+  function newGame(player) {
+    const g = {
+      version: 4, player: player || 'allied', moments: [], turnsPerYear: C.turnsPerYear, year: C.startYear, turn: 1, turnCount: 1, nextId: 1,
+      map: M.create(), owner: [], units: [], events: [],
+      casualties: 0, gCasualties: 0, morale: C.startMorale, manpower: C.manpowerByYear[C.startYear] || 0,
+      showZones: true, log: [], over: false, tutorialDone: false,
+      digCredits: {}, bombarded: [], techUsed: {}, counters: {}, notes: {}, tut: {},
+      exhaustion: 0, farthest: 0, warn: null, hubHeld: false, tips: {},
+    };
+    K.stat(g);
+    for (let r = 0; r < C.rows; r++) {
+      g.owner.push([]);
+      for (let c = 0; c < C.cols; c++) g.owner[r].push(c <= C.alliedFront ? 'a' : c >= 8 ? 'g' : null);
+    }
+    U.placeStartingForces(g);
+    return g;
+  }
+
+  const say = (text, kind) => game.log.push({ text, kind });
+
+  // ---- Persistence (optional; never allowed to break the game) ----
+  function save() {
+    if (game.over || !active || !inSession) return;
+    try { localStorage.setItem(C.saveKey, JSON.stringify(game, (k, v) => (k === 'events' ? undefined : v))); } catch (e) { /* ignore */ }
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(C.saveKey);
+      if (!raw) return null;
+      const g = JSON.parse(raw);
+      if (!g || g.version !== 4 || g.over || !g.map || g.map.length !== C.rows || !Array.isArray(g.units)) return null;
+      g.events = []; g.tips = g.tips || {}; g.turnsPerYear = g.turnsPerYear || 6;
+      return g;
+    } catch (e) { return null; }
+  }
+  function clearSave() { try { localStorage.removeItem(C.saveKey); } catch (e) { /* ignore */ } }
+
+  // ---- What the selected unit may do ----
+  const selected = () => (selectedId ? U.byId(game, selectedId) : null);
+  const canAct = u => !!u && u.side === 'allied' && !u.acted && !u.broken && !game.over;
+  const defaultMode = u => (u.type === 'artillery' ? 'bombard' : u.type === 'gas' && game.year >= C.gas.unlockYear ? 'gas' : 'move');
+
+  function actionState(u) {
+    const a = { move: false, dig: false, bombard: false, long: false, gas: false, hold: false };
+    if (!canAct(u)) return a;
+    a.move = true; a.hold = true;
+    a.dig = K.canDig(game, u);
+    a.bombard = u.type === 'artillery';
+    a.long = u.type === 'artillery' && game.year >= C.bombard.long.unlockYear;
+    a.gas = u.type === 'gas' && game.year >= C.gas.unlockYear;
+    return a;
+  }
+
+  function rangeSquares(u) {
+    const t = new Map();
+    if (!canAct(u) || !(mode === 'bombard' || mode === 'long' || mode === 'gas')) return t;
+    const range = mode === 'gas' ? C.ranges.gas : C.ranges.artillery;
+    for (let r = 0; r < C.rows; r++) for (let c = 0; c < C.cols; c++)
+      if (M.distance(u.r, u.c, r, c) <= range && !(r === u.r && c === u.c)) t.set(r + ',' + c, true);
+    return t;
+  }
+
+  function splash(r, c) {
+    if (mode === 'long') return [[r, c]].concat(M.neighbors(r, c));
+    if (mode === 'gas') { const o = []; for (let d = -C.gas.areaRows; d <= C.gas.areaRows; d++) if (M.inBounds(r + d, c)) o.push([r + d, c]); return o; }
+    return [[r, c]];
+  }
+
+  function placeSquares() {
+    const s = new Set();
+    if (mode !== 'place') return s;
+    for (let r = 0; r < C.rows; r++) for (const c of C.alliedRearCols) if (!U.at(game, r, c)) s.add(r + ',' + c);
+    return s;
+  }
+
+  function recruitOptions() {
+    return Object.keys(C.units).filter(t => U.isAvailable(t, game.year))
+      .map(t => ({ type: t, name: C.units[t].name, cost: C.recruitCost[t], ok: C.recruitCost[t] <= game.manpower && !game.over }));
+  }
+
+  function buildView() {
+    const sel = selected();
+    const kill = U.killZone(game, 'allied');
+    const danger = new Set();
+    for (const u of game.units) if (u.side === 'allied' && kill.has(u.r + ',' + u.c)) danger.add(u.id);
+    const reach = canAct(sel) && mode === 'move' ? U.reachable(game, sel) : null;
+    const targets = new Map();
+    if (canAct(sel) && mode === 'move' && C.combat.atkMod[sel.type] > 0) for (const e of K.attackTargets(game, sel)) targets.set(e.r + ',' + e.c, e.id);
+    const v = {
+      game, selected: sel, mode, reach, targets, range: rangeSquares(sel), place: placeSquares(), splash,
+      kill: game.showZones || sel ? kill : null, danger, actions: actionState(sel),
+      recruit: recruitOptions(), recruitType, locked,
+    };
+    v.advice = WF.Coach.advise(game, v);
+    v.pulses = locked || !v.advice ? [] : v.advice.pulses || [];
+    return v;
+  }
+
+  // A one-time tip counts as learned once the player acts while it is showing.
+  let shownTip = null;
+  function markSeen() { if (shownTip) game.tips[shownTip] = true; }
+
+  function refresh() {
+    const v = buildView();
+    shownTip = v.advice && v.advice.key ? v.advice.key : null;
+    WF.Render.setView(v);
+    WF.UI.render(game, v, v.advice);
+    save();
+  }
+
+  function flush() { const ev = game.events; game.events = []; WF.Render.enqueue(ev); }
+
+  // ---- Input ----
+  function afterAction() {
+    markSeen();
+    selectedId = null; mode = 'move';
+    flush();
+    if (game.morale <= 0) return finish('collapse');
+    refresh();
+  }
+
+  function select(u) {
+    selectedId = u.id; recruitType = null; mode = defaultMode(u);
+    WF.Audio.play('click');
+    if (zoomIdx) WF.Render.scrollTo(u.r, u.c);
+  }
+
+  function onCell(r, c) {
+    if (locked || game.over) return;
+    WF.UI.hideTip();
+    const clicked = U.at(game, r, c), sel = selected(), k = r + ',' + c;
+
+    if (mode === 'place' && !clicked && placeSquares().has(k)) {
+      const cost = C.recruitCost[recruitType];
+      if (game.manpower >= cost) {
+        game.manpower -= cost;
+        const u = U.create(game, recruitType, 'allied', r, c);
+        WF.emit(game, { t: 'spawn', id: u.id });
+        say(C.units[recruitType].name + ' arrives at ' + M.label(r, c) + '.');
+        markSeen(); recruitType = null; mode = defaultMode(u); selectedId = u.id;
+        flush(); return refresh();
+      }
+    }
+
+    if (canAct(sel)) {
+      if (mode === 'move') {
+        if (clicked && clicked.side === 'german' && C.combat.atkMod[sel.type] > 0 && K.attackTargets(game, sel).includes(clicked)) {
+          if (sel.type === 'tank' && !game.techUsed.tank) game.techUsed.tank = { y: game.year, t: game.turn };
+          K.attack(game, sel, clicked); game.tut.attacked = true;
+          return afterAction();
+        }
+        if (!clicked && U.reachable(game, sel).has(k)) {
+          const from = M.label(sel.r, sel.c);
+          U.moveTo(game, sel, r, c); game.tut.moved = true;
+          if (sel.type === 'tank' && !game.techUsed.tank) game.techUsed.tank = { y: game.year, t: game.turn };
+          say(C.units[sel.type].name + ' moved ' + from + ' → ' + M.label(r, c) + '.');
+          if (game.map[r][c].hub) Y.note(game, 'hub');
+          WF.Audio.play('click');
+          return afterAction();
+        }
+      } else if ((mode === 'bombard' || mode === 'long') && rangeSquares(sel).has(k)) {
+        K.bombard(game, sel, r, c, mode); return afterAction();
+      } else if (mode === 'gas' && rangeSquares(sel).has(k)) {
+        K.gas(game, sel, r, c); return afterAction();
+      }
+    }
+
+    if (clicked) select(clicked);
+    else { selectedId = null; if (mode !== 'place') mode = 'move'; }
+    refresh();
+  }
+
+  function onAction(a) {
+    if (locked || game.over) return;
+    const sel = selected();
+    if (!actionState(sel)[a]) return;
+    recruitType = null;
+    if (a === 'move' || a === 'bombard' || a === 'long' || a === 'gas') { mode = a; WF.Audio.play('click'); return refresh(); }
+    if (a === 'dig') {
+      K.dig(game, sel); game.tut.dug = true;
+      say(C.units[sel.type].name + ' digs in at ' + M.label(sel.r, sel.c) + '. Trench level ' + game.map[sel.r][sel.c].trench + '.');
+      return afterAction();
+    }
+    if (a === 'hold') {
+      const healed = K.hold(game, sel);
+      say(C.units[sel.type].name + ' at ' + M.label(sel.r, sel.c) + (healed ? ' rests and recovers 1,000 men.' : ' waits.'));
+      return afterAction();
+    }
+  }
+
+  function onRecruit(type) {
+    if (locked || game.over) return;
+    const opt = recruitOptions().find(o => o.type === type);
+    if (!opt || !opt.ok) return;
+    if (mode === 'place' && recruitType === type) { mode = 'move'; recruitType = null; }
+    else { mode = 'place'; recruitType = type; selectedId = null; }
+    WF.Audio.play('click');
+    refresh();
+  }
+
+  // ---- Hover tooltips ----
+  const label = u => WF.Names.adj(game, u.side) + ' ' + C.units[u.type].name;
+  const men = n => Math.round(n * C.menPerStrength).toLocaleString();
+
+  function odds(toDef, toAtt) {
+    const ratio = toDef / Math.max(0.1, toAtt);
+    if (toDef < 0.8) return ['bad', 'Suicidal: you barely scratch them'];
+    if (ratio >= 1.4) return ['good', 'Good odds'];
+    if (ratio >= 0.9) return ['even', 'Even fight'];
+    if (ratio >= 0.5) return ['bad', 'Bad odds'];
+    return ['bad', 'Terrible odds'];
+  }
+
+  function describeHover(r, c) {
+    const sel = selected(), u = U.at(game, r, c), k = r + ',' + c, cell = game.map[r][c];
+    const v = { reach: canAct(sel) && mode === 'move' ? U.reachable(game, sel) : null };
+    if (mode === 'place' && placeSquares().has(k)) return '<b>Place your new unit here</b>';
+    if (canAct(sel) && mode === 'move' && u && u.side === 'german' && K.attackTargets(game, sel).includes(u) && C.combat.atkMod[sel.type] > 0) {
+      const e = K.estimate(game, sel, u), o = odds(e.toDef, e.toAtt);
+      return '<b>Attack ' + label(u) + '</b><div class="odds ' + o[0] + '">' + o[1] + '</div>' +
+        '<div>You deal about <b>' + men(e.toDef) + '</b></div><div>You lose about <b>' + men(e.toAtt) + '</b></div>' +
+        (e.creeping ? '<div class="good">Creeping barrage: no machine-gun help for them</div>' : '') +
+        (u.type !== 'infantry' ? '' : g_cover(u));
+    }
+    if (canAct(sel) && (mode === 'bombard' || mode === 'long') && rangeSquares(sel).has(k)) {
+      const long = mode === 'long', dmg = long ? C.bombard.long.damage : C.bombard.short.damage;
+      const hit = splash(r, c).map(([rr, cc]) => U.at(game, rr, cc)).filter(Boolean);
+      const friendly = hit.some(x => x.side === 'allied');
+      return '<b>' + (long ? 'Long barrage' : 'Shell') + ' ' + M.label(r, c) + '</b><div>Up to about <b>' + men(dmg * (1 - [0, .4, .6, .8][cell.trench])) + '</b> damage to the target' +
+        (cell.trench ? ' (trench level ' + cell.trench + ' absorbs some)' : '') + '</div><div>Leaves craters and clears wire.</div>' +
+        (long ? '<div class="bad">The enemy will see it coming</div>' : '') + (friendly ? '<div class="bad">Warning: you would hit your own men</div>' : '');
+    }
+    if (canAct(sel) && mode === 'gas' && rangeSquares(sel).has(k)) return '<b>Gas attack on ' + M.label(r, c) + '</b><div>Hits 3 squares in a line. Trenches don\'t help against gas.</div>' + (game.techUsed.gas ? '' : '<div class="good">First use: very effective</div>');
+    if (v.reach && v.reach.has(k)) {
+      const inKill = U.killZone(game, 'allied').has(k);
+      return '<b>Move to ' + M.label(r, c) + '</b>' + (cell.crater ? '<div>Craters slow you down</div>' : '') + (cell.trench ? '<div class="good">Trench: you\'ll be protected here</div>' : '') +
+        (inKill ? '<div class="bad">Machine-gun fire here. You will be shot.</div>' : '');
+    }
+    if (u) {
+      const def = C.units[u.type];
+      return '<b>' + label(u) + '</b><div>' + men(u.strength) + ' men' + (u.side === 'allied' && u.strength < u.max ? ' <span class="good">(wounded: rest in a trench to heal)</span>' : '') + '</div><div class="dim">' + def.role + '</div>';
+    }
+    const parts = [M.describe(cell)];
+    return '<b>Sector ' + M.label(r, c) + '</b><div>' + parts[0].charAt(0).toUpperCase() + parts[0].slice(1) + '</div>' +
+      (U.killZone(game, 'allied').has(r + ',' + c) ? '<div class="bad">Enemy machine-gun fire covers this square</div>' : '');
+  }
+  const g_cover = u => (game.map[u.r][u.c].trench ? '<div class="dim">They are dug in (level ' + game.map[u.r][u.c].trench + ')</div>' : '');
+
+  function onHover(cell, x, y, kb) {
+    if (!cell || locked) return WF.UI.hideTip();
+    const html = describeHover(cell.r, cell.c);
+    if (kb) { const p = WF.Render.screenPos(cell.r, cell.c); x = p.x + p.size / 2; y = p.y + p.size / 2; }
+    WF.UI.showTip(html, x, y);
+  }
+
+  // ---- Turn order ----
+  const alliedOnHub = () => game.units.some(u => u.side === 'allied' && game.map[u.r][u.c].hub);
+
+  function endTurn() {
+    if (locked || game.over) return;
+    markSeen();
+    selectedId = null; mode = 'move'; recruitType = null; game.tut.ended = true;
+    WF.UI.hideTip();
+    game.hubHeld = alliedOnHub();
+    { const kz = U.killZone(game, 'allied'); K.stat(game).exposedTurns += game.units.filter(u => u.side === 'allied' && kz.has(u.r + ',' + u.c)).length; }
+    K.mgFire(game, 'allied');
+    WF.UI.banner(WF.Names.foe(game) + ' turn', 'Watch what they do');
+    WF.AI.takeTurn(game);
+    K.mgFire(game, 'german');
+
+    { // worst turn of the game
+      const st = K.stat(game), tc = st.turnCauses, total = Object.values(tc).reduce((a, b) => a + b, 0);
+      if (total * C.menPerStrength > (st.worst.men || 0)) {
+        const top = Object.keys(tc).sort((a, b) => tc[b] - tc[a])[0];
+        st.worst = { men: total * C.menPerStrength, label: game.year + ', turn ' + game.turn, cause: ({ machinegun: 'machine guns', shelling: 'artillery shells', assault: 'infantry assaults', gas: 'gas' })[top] || 'combat' };
+      }
+      st.turnCauses = {};
+    }
+    let outcome = null, yearCard = null;
+    if (game.morale <= 0) outcome = 'collapse';
+    else if (game.hubHeld && alliedOnHub()) outcome = 'breakthrough';
+    if (!outcome) {
+      game.turn++; game.turnCount++;
+      if (game.turn > game.turnsPerYear) {
+        if (game.year >= C.endYear) { game.turn = game.turnsPerYear; outcome = 'armistice'; }
+        else {
+          game.turn = 1; game.year++; Y.startYear(game); yearCard = game.year;
+          if (game.morale <= 0) outcome = 'collapse';
+        }
+      }
+      if (!outcome) {
+        for (const u of game.units) u.acted = false;
+        game.bombarded = []; game.hubHeld = false;
+        K.tankBreakdowns(game);
+      }
+    }
+    if (game.year > C.startYear || game.turnCount > 4 || (game.tut.moved && game.tut.dug)) game.tutorialDone = true;
+
+    locked = true;
+    flush();
+    refresh();
+    WF.Render.whenIdle(() => {
+      locked = false;
+      if (outcome) return finish(outcome);
+      if (yearCard) showYearCard(yearCard);
+      else WF.UI.banner('Your turn', C.units.infantry ? 'Turn ' + game.turn + ' of ' + game.turnsPerYear + ', ' + game.year : '');
+      refresh();
+    });
+  }
+
+  function showYearCard(year, first) {
+    const c = Y.card(year, game);
+    if (!c) return;
+    WF.Audio.play('horn');
+    WF.UI.card({ kicker: String(year), title: c.title, className: 'yearcard',
+      html: '<p class="hist">' + c.text + '</p><div class="news"><b>What\'s new</b><span>' + c.news + '</span></div>', button: 'Continue' });
+  }
+
+  function intro() {
+    WF.UI.card({ kicker: 'August 1914', title: 'Break the stalemate', className: 'briefing',
+      html: '<p class="hist">War has come to Europe. You command the ' + (game.player === 'german' ? 'German army' : 'Allied armies') + ' (blue) facing the ' + (game.player === 'german' ? 'Allied armies' : 'German army') + ' (gray) on the Western Front.</p>' +
+        '<ul class="mission"><li><b>Your goal</b>Capture a gold-star <span class="star">★</span> rail ' + (game.player === 'german' ? 'junction' : 'hub') + ' deep behind the enemy lines, and hold it for a turn.</li>' +
+        '<li><b>Your time</b>The war ends in November 1918. That is 30 turns.</li>' +
+        '<li><b>Your help</b>Your sergeant explains everything as you go. Just follow the yellow arrows.</li></ul>',
+      button: 'Start the war', onClick: () => refresh() });
+  }
+
+  function finish(type) {
+    game.over = true; locked = false;
+    clearSave();
+    selectedId = null; mode = 'move';
+    refresh();
+    WF.UI.endScreen(Y.endSummary(game, type), chooseSide, game, openMenu);
+  }
+
+  // ---- Main menu ----
+  let inSession = false;       // true once the player has entered a game this page load
+  let active = false;          // true when `game` is a real game (saved or started), not the board behind the menu
+  function lengthSetting() { try { const v = parseInt(localStorage.getItem('wf-turns'), 10); if (v >= 2 && v <= 6) return v; } catch (e) { /* ignore */ } return C.turnsPerYear; }
+
+  function openMenu() {
+    const live = active && game && !game.over && game.units.length > 0;
+    WF.UI.menu({
+      canContinue: !!live, inSession,
+      summary: live ? game.year + ', turn ' + game.turn + ' of ' + game.turnsPerYear + '. ' + (game.casualties * C.menPerStrength).toLocaleString() + ' soldiers lost.' : '',
+      length: C.turnsPerYear,
+    });
+  }
+
+  function chooseSide() {
+    WF.UI.closeMenu();
+    WF.UI.card({ kicker: 'Western Front', title: 'Choose your army', className: 'briefing',
+      html: '<p class="hist">The same war, seen from either side of no man\'s land. The rules are the same for both, so you will meet the same problems.</p>',
+      choices: [
+        { label: 'Play as the Allies', sub: 'Britain, France and their allies. Break through the German line.', onClick: () => begin('allied') },
+        { label: 'Play as Germany', sub: 'The German army. Break through the Allied line.', onClick: () => begin('german') },
+      ],
+      cancel: 'Back to menu', onCancel: openMenu });
+  }
+
+  function begin(player) {
+    game = newGame(player); selectedId = null; mode = 'move'; recruitType = null; locked = false; inSession = true; active = true;
+    say('August 1914. The war begins. Armies meet in open country.', 'note');
+    refresh();
+    intro();
+  }
+
+  function help() {
+    WF.UI.card({ kicker: 'How to play', title: 'Quick guide', className: 'help',
+      html: '<ol class="steps"><li><b>Select</b> a blue unit by clicking it.</li>' +
+        '<li><b>Move</b> by clicking a glowing square. <b>Attack</b> by clicking a red target next to you. Hover to see the odds first.</li>' +
+        '<li><b>Dig in</b>, rest or shell using the buttons that appear. Each unit gets one action per turn.</li>' +
+        '<li>Press <b>End Turn</b> (or the E key). The enemy moves, then it is your turn again.</li></ol>' +
+        '<div class="legend"><span><i class="lg hatch"></i>Machine-gun fire zone: units in the open here get shot</span>' +
+        '<span><i class="lg star"></i>Rail hub: capture and hold one to win</span>' +
+        '<span><i class="lg dash"></i>Dashed line: the front line between the armies</span>' +
+        '<span><i class="lg bar"></i>Green bar: soldiers left in the unit</span></div>' +
+        '<p class="dim">Keyboard: arrow keys move the cursor on the map, Enter clicks, Esc deselects, E ends the turn.</p>',
+      button: 'Got it' });
+  }
+
+  function start() {
+    try {
+      const t = parseInt(new URLSearchParams(location.search).get('turns'), 10);   // teacher shortcut: ?turns=4
+      if (t >= 2 && t <= 6) C.turnsPerYear = t; else C.turnsPerYear = lengthSetting();
+    } catch (e) { /* ignore */ }
+    WF.UI.init({
+      onEndTurn: endTurn, onAction, onRecruit, onHelp: help,
+      onMenu: openMenu,
+      onMenuContinue: () => { inSession = true; WF.UI.closeMenu(); refresh(); },
+      onMenuNew: chooseSide,
+      onLength: n => { C.turnsPerYear = n; try { localStorage.setItem('wf-turns', String(n)); } catch (e) { /* ignore */ } },
+      onZoom: () => { zoomIdx = (zoomIdx + 1) % ZOOMS.length; WF.Render.setZoom(ZOOMS[zoomIdx][0]); document.getElementById('btn-zoom').textContent = ZOOMS[zoomIdx][1]; const s = selected(); if (s && zoomIdx) WF.Render.scrollTo(s.r, s.c); },
+      onFull: () => {
+        const b = document.getElementById('btn-full');
+        try {
+          if (document.fullscreenElement) { document.exitFullscreen(); return; }
+          const p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+          if (p && p.catch) p.catch(() => { b.textContent = 'Not available'; b.disabled = true; });
+        } catch (e) { b.textContent = 'Not available'; b.disabled = true; }
+      },
+      onSound: () => { WF.Audio.setMuted(!WF.Audio.isMuted()); refresh(); },
+      onNewGame: openMenu,
+    });
+    WF.Render.init(document.getElementById('board'), document.getElementById('board-wrap'), {
+      onCell, onHover, onCancel: () => { selectedId = null; mode = 'move'; recruitType = null; refresh(); },
+    });
+    const saved = load();
+    active = !!saved;
+    game = saved || newGame('allied');       // otherwise just the board behind the menu
+    refresh();
+    openMenu();
+  }
+
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+    else start();
+  }
+  return { newGame, endTurn, onCell, onAction, _set: g => { game = g; }, _get: () => game };
+})();
+
+
+</script>
+</body></html>
