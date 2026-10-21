@@ -64,6 +64,8 @@ button:focus-visible, #board:focus-visible { outline: 3px solid var(--brass); ou
 .ubody { display: flex; flex-direction: column; min-width: 0; }
 .ubody b { font: 700 17px var(--display); letter-spacing: .03em; }
 .men { color: var(--brass); font-weight: 700; }
+.hurt { color: #8de08d; font-weight: 700; font-size: .85rem; }
+.advisor[hidden] { display: none; }
 .meta, .role { font-size: .82rem; color: var(--dim); }
 #actions { display: flex; flex-direction: column; gap: 6px; }
 #actions[hidden] { display: none; }
@@ -193,3 +195,4 @@ button:focus-visible, #board:focus-visible { outline: 3px solid var(--brass); ou
 .who-field { font-family: var(--body); margin: 8px 0; } .who-field label { display: block; font-size: .85rem; margin-bottom: 2px; }
 .sheet .dim { color: #5b4f33; font-family: var(--body); font-size: .88rem; }
 @media (max-width: 600px) { .choices { grid-template-columns: 1fr; } .cause { grid-template-columns: 100px 1fr 60px; } }
+.advisor, .advisor.good, .advisor.warn, .advisor.info { color: var(--paper-ink); }

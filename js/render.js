@@ -202,7 +202,7 @@ WF.Render = (function () {
       const c = centre(u.r, u.c);
       let sp = sprites.get(u.id);
       if (!sp) { sp = { id: u.id, x: c.x, y: c.y, appear: t, hold: false, ds: u.strength, gone: false, flash: 0 }; sprites.set(u.id, sp); }
-      sp.u = { faction: WF.Names.faction(g, u.side), type: u.type, side: u.side, r: u.r, c: u.c, strength: u.strength, max: u.max, acted: u.acted, broken: u.broken };
+      sp.u = { inTrench: g.map[u.r][u.c].trench > 0, faction: WF.Names.faction(g, u.side), type: u.type, side: u.side, r: u.r, c: u.c, strength: u.strength, max: u.max, acted: u.acted, broken: u.broken };
       sp.tx = c.x; sp.ty = c.y; sp.gone = false;
     }
     for (const [id, sp] of sprites) if (!seen.has(id) && !sp.gone) { sp.gone = true; sp.goneAt = t; }
@@ -478,6 +478,11 @@ WF.Render = (function () {
     ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(nx, ny, nr, 0, TAU); ctx.fill(); ctx.stroke();
     const sv = Math.max(0, Math.round(str)); ctx.fillStyle = '#111'; ctx.font = '800 ' + Math.round(nr * (sv >= 10 ? 0.98 : 1.25)) + 'px Atkinson Hyperlegible, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(Math.max(0, Math.round(str))), nx, ny + 0.5);
     if (u.acted && u.side === 'allied' && !sp.dying) { ctx.fillStyle = '#7be07b'; ctx.font = '800 ' + Math.round(S * 0.26) + 'px sans-serif'; ctx.fillText('✓', x - S * 0.3, y - S * 0.3); }
+    if (u.side === 'allied' && !u.acted && !sp.dying && u.strength < u.max && u.inTrench) {
+      const hx = x - S * 0.34, hy = y + S * 0.02, hr = S * (0.12 + 0.015 * Math.sin(t * 5));
+      ctx.fillStyle = '#2fa84a'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hx, hy, hr, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.fillRect(hx - hr * 0.6, hy - hr * 0.16, hr * 1.2, hr * 0.32); ctx.fillRect(hx - hr * 0.16, hy - hr * 0.6, hr * 0.32, hr * 1.2);
+    }
     if (u.broken) { ctx.fillStyle = '#ff4a3c'; ctx.font = '800 ' + Math.round(S * 0.36) + 'px sans-serif'; ctx.fillText('✕', x, y); }
     ctx.restore();
   }

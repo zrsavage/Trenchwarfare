@@ -60,9 +60,10 @@ WF.UI = (function () {
 
   function renderAdvisor(adv) {
     const a = $('advisor');
+    a.hidden = !adv;
+    if (!adv) return;
     a.className = 'advisor ' + (adv.tone || 'info');
-    const html = adv.text;
-    if ($('advice').innerHTML !== html) $('advice').innerHTML = html;
+    if ($('advice').innerHTML !== adv.text) $('advice').innerHTML = adv.text;
   }
 
   function renderUnitCard(g, v) {
@@ -96,7 +97,11 @@ WF.UI = (function () {
       if (g.year >= C.bombard.long.unlockYear) h += btn('long', 'long', 'Long barrage', 'Heavy damage, but it warns the enemy', v.mode === 'long', !a.long);
     }
     if (u.type === 'gas') h += btn('gas', 'gas', 'Gas attack', 'One-time hit on 3 squares', v.mode === 'gas', !a.gas);
-    if (a.hold) h += btn('hold', 'rest', g.map[u.r][u.c].trench ? 'Rest' : 'Skip', g.map[u.r][u.c].trench ? 'Recover 1,000 men in a trench' : 'End this unit\'s turn', false, false);
+    if (a.hold) {
+      const tr = g.map[u.r][u.c].trench > 0, hurtU = u.strength < u.max;
+      h += btn('hold', 'rest', tr && hurtU ? 'Rest and heal' : tr ? 'Rest' : 'Skip',
+        tr && hurtU ? 'Recover 1,000 men (' + u.strength + ' of ' + u.max + ')' : tr ? 'Already at full strength' : hurtU ? 'Skip. Units only heal in a trench' : 'End this unit\'s turn', false, false);
+    }
     box.innerHTML = h;
   }
 
@@ -141,8 +146,8 @@ WF.UI = (function () {
     const e = $('endturn');
     e.disabled = g.over || v.locked;
     $('idle').textContent = idle ? idle + ' unit' + (idle === 1 ? '' : 's') + ' still can act' : 'all units have acted';
-    e.classList.toggle('attn', !!adv.pulseEnd);
-    for (const b of document.querySelectorAll('#actions button[data-a="dig"]')) b.classList.toggle('attn', !!adv.pulseDig);
+    e.classList.toggle('attn', !!(adv && adv.pulseEnd));
+    for (const b of document.querySelectorAll('#actions button[data-a="dig"]')) b.classList.toggle('attn', !!(adv && adv.pulseDig));
   }
 
   // ---- tooltip / banner ----

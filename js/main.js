@@ -13,7 +13,7 @@ WF.Game = (function () {
       casualties: 0, gCasualties: 0, morale: C.startMorale, manpower: C.manpowerByYear[C.startYear] || 0,
       showZones: true, log: [], over: false, tutorialDone: false,
       digCredits: {}, bombarded: [], techUsed: {}, counters: {}, notes: {}, tut: {},
-      exhaustion: 0, farthest: 0, warn: null, hubHeld: false,
+      exhaustion: 0, farthest: 0, warn: null, hubHeld: false, tips: {},
     };
     K.stat(g);
     for (let r = 0; r < C.rows; r++) {
@@ -37,7 +37,7 @@ WF.Game = (function () {
       if (!raw) return null;
       const g = JSON.parse(raw);
       if (!g || g.version !== 4 || g.over || !g.map || g.map.length !== C.rows || !Array.isArray(g.units)) return null;
-      g.events = [];
+      g.events = []; g.tips = g.tips || {};
       return g;
     } catch (e) { return null; }
   }
@@ -100,12 +100,17 @@ WF.Game = (function () {
       recruit: recruitOptions(), recruitType, locked,
     };
     v.advice = WF.Coach.advise(game, v);
-    v.pulses = locked ? [] : v.advice.pulses || [];
+    v.pulses = locked || !v.advice ? [] : v.advice.pulses || [];
     return v;
   }
 
+  // A one-time tip counts as learned once the player acts while it is showing.
+  let shownTip = null;
+  function markSeen() { if (shownTip) game.tips[shownTip] = true; }
+
   function refresh() {
     const v = buildView();
+    shownTip = v.advice && v.advice.key ? v.advice.key : null;
     WF.Render.setView(v);
     WF.UI.render(game, v, v.advice);
     save();
@@ -115,6 +120,7 @@ WF.Game = (function () {
 
   // ---- Input ----
   function afterAction() {
+    markSeen();
     selectedId = null; mode = 'move';
     flush();
     if (game.morale <= 0) return finish('collapse');
@@ -139,7 +145,7 @@ WF.Game = (function () {
         const u = U.create(game, recruitType, 'allied', r, c);
         WF.emit(game, { t: 'spawn', id: u.id });
         say(C.units[recruitType].name + ' arrives at ' + M.label(r, c) + '.');
-        recruitType = null; mode = defaultMode(u); selectedId = u.id;
+        markSeen(); recruitType = null; mode = defaultMode(u); selectedId = u.id;
         flush(); return refresh();
       }
     }
@@ -240,7 +246,7 @@ WF.Game = (function () {
     }
     if (u) {
       const def = C.units[u.type];
-      return '<b>' + label(u) + '</b><div>' + men(u.strength) + ' men</div><div class="dim">' + def.role + '</div>';
+      return '<b>' + label(u) + '</b><div>' + men(u.strength) + ' men' + (u.side === 'allied' && u.strength < u.max ? ' <span class="good">(wounded: rest in a trench to heal)</span>' : '') + '</div><div class="dim">' + def.role + '</div>';
     }
     const parts = [M.describe(cell)];
     return '<b>Sector ' + M.label(r, c) + '</b><div>' + parts[0].charAt(0).toUpperCase() + parts[0].slice(1) + '</div>' +
@@ -260,6 +266,7 @@ WF.Game = (function () {
 
   function endTurn() {
     if (locked || game.over) return;
+    markSeen();
     selectedId = null; mode = 'move'; recruitType = null; game.tut.ended = true;
     WF.UI.hideTip();
     game.hubHeld = alliedOnHub();
@@ -295,7 +302,7 @@ WF.Game = (function () {
         K.tankBreakdowns(game);
       }
     }
-    if (game.year > C.startYear || game.turnCount > 4) game.tutorialDone = true;
+    if (game.year > C.startYear || game.turnCount > 4 || (game.tut.moved && game.tut.dug)) game.tutorialDone = true;
 
     locked = true;
     flush();
